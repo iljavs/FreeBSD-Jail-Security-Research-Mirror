@@ -191,7 +191,7 @@ poweroff
 
 # Start VM with serial console
 
-````sh
+```sh
 ./run.sh
 ```
 
@@ -199,4 +199,4 @@ poweroff
 
 ```sh
 jexec -u root prisonbreak
-````
+```
