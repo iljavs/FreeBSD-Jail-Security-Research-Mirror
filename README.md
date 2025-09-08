@@ -5,7 +5,7 @@
 
 ## Setup and run FreeBSD VM
 
-See https://github.com/iljavs/FreeBSD-Jail-Security-Research/blob/main/vm/vm-setup-instructions.md
+See [VM setup instructions](https://github.com/iljavs/FreeBSD-Jail-Security-Research/blob/main/vm/vm-setup-instructions.md)
 
 Run VM with
 ```sh
