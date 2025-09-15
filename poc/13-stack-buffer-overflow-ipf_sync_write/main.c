@@ -11,16 +11,22 @@
 #define LEN 100000
 
 /*
-# /etc/rc.conf
-ipfilter_enable="YES"             # Start ipf firewall
-ipfilter_rules="/etc/ipf.rules"   # loads rules definition text file
-ipv6_ipfilter_rules="/etc/ipf6.rules" # loads rules definition text file for IPv6
-ipmon_enable="YES"                # Start IP monitor log
-ipmon_flags="-Ds"                 # D = start as daemon
-                                  # s = log to syslog
-                                  # v = log tcp window, ack, seq
-                                  # n = map IP & port to names
-kld_list="ipfilter"
+Prerequisites
+-------------
+1. Host must have ipfilter kernel module loaded
+
+kldload ipfilter
+
+
+2. ipfilter device /dev/ipsync must be visible in jail
+
+cat << 'EOF' > /etc/devfs.rules
+[devfsrules_ipf=5]
+add path ipsync    unhide
+EOF
+
+service devfs restart
+service jail restart prisonbreak
 */
 
 typedef struct  synchdr {
@@ -39,7 +45,7 @@ int main() {
   int fd = open("/dev/ipsync", O_RDWR);
 
   if (fd < 0) {
-    printf("open failed\n");
+    printf("Error: failed to open /dev/ipsync\n");
     exit(0);
   }
 
