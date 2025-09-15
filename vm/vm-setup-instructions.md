@@ -18,9 +18,9 @@ curl -sL https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.3/FreeB
 ```sh
 qemu-system-x86_64 \
   -m 4G \
-  -cpu Haswell,-avx \
+  -cpu host \
   -smp 4 \
-  -machine q35,accel=tcg \
+  -machine q35,accel=kvm \
   -drive file=FreeBSD-14.3-RELEASE-amd64.qcow2,format=qcow2 \
   -cdrom /tmp/FreeBSD-14.3-RELEASE-amd64-bootonly.iso \
   -boot d \
@@ -44,9 +44,9 @@ Shut down VM
 qemu-system-x86_64 \
   -M q35 \
   -m 4G \
-  -cpu Haswell,-avx \
+  -cpu host \
   -smp 4 \
-  -machine q35,accel=tcg \
+  -machine q35,accel=kvm \
   -drive file=FreeBSD-14.3-RELEASE-amd64.qcow2,format=qcow2 \
   -device e1000,netdev=net0 \
   -netdev user,id=net0,hostfwd=tcp::2222-:22
