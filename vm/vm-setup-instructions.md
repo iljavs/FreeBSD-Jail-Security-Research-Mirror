@@ -3,7 +3,7 @@
 ## Create virtual disk
 
 ```sh
-qemu-img create -f qcow2 FreeBSD-14.3-RELEASE-amd64.qcow2 10G
+qemu-img create -f qcow2 FreeBSD-14.3-RELEASE-amd64.qcow2 50G
 ```
 
 ## Fetch installation ISO
@@ -87,6 +87,7 @@ Give the hacker time to take a screenshot of the spoils.
 ```sh
 cat << 'EOF' >> /etc/sysctl.conf
 kern.panic_reboot_wait_time=-1
+debug.debugger_on_panic=1
 EOF
 ```
 
