@@ -80,6 +80,16 @@ boot_serial="YES"
 EOF
 ```
 
+## Disable automatic reboot on panic
+
+Give the hacker time to take a screenshot of the spoils.
+
+```sh
+cat << 'EOF' >> /etc/sysctl.conf
+kern.panic_reboot_wait_time=-1
+EOF
+```
+
 ## Enable jails
 
 See https://docs.freebsd.org/en/books/handbook/jails/
