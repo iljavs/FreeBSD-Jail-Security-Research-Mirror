@@ -1,5 +1,9 @@
 # VM setup instructions
 
+## Prebuilt images
+
+Two prebuilt qcow2 images, compatible with the `run.sh` script are available for download from https://hacktheplanet.be/philez/freebsd/. One has the default GENERIC kernel and the other one has a custom built GENERIC-DEBUG kernel to help with proof of concept development. Download, decompress and rename the one you want to use to `FreeBSD-14.3-RELEASE-amd64.qcow2`. The root password is `foobar`.
+
 ## Create virtual disk
 
 ```sh
