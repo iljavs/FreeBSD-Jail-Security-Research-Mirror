@@ -1,4 +1,5 @@
 /vm/*.qcow2
-vm/mnt/*
+/vm/mnt/*
 !vm/mnt/.keep
 /TODO.md
+/vm-kernel-with-asserts
