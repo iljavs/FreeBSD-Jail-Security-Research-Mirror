@@ -1,9 +1,9 @@
 #!/bin/sh
 
 qemu-system-x86_64 \
-  -m 2G \
+  -m 16G \
   -cpu host \
-  -smp 4 \
+  -smp 8 \
   -machine q35,accel=kvm \
   -drive file=FreeBSD-14.3-RELEASE-amd64.qcow2,format=qcow2 \
   -netdev user,id=net0,hostfwd=tcp::2222-:22 \
