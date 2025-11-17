@@ -1,7 +1,7 @@
 #!/bin/sh
 
 qemu-system-x86_64 \
-  -m 16G \
+  -m 8G \
   -cpu host \
   -smp 8 \
   -machine q35,accel=kvm \
@@ -10,8 +10,8 @@ qemu-system-x86_64 \
   -device e1000,netdev=net0,mac=52:54:00:aa:00:01 \
   -netdev socket,id=net1,listen=:12346 \
   -device e1000,netdev=net1,mac=52:54:00:aa:00:02 \
-  -nographic \
   -serial mon:stdio \
   -serial tcp:0.0.0.0:4444,server,nowait \
+  -nographic \
   -vga none \
   -display none

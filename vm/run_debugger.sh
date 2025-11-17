@@ -1,9 +1,9 @@
 #!/bin/sh
 
 qemu-system-x86_64 \
-  -m 4G \
+  -m 2G \
   -cpu host \
-  -smp 4 \
+  -smp 2 \
   -machine q35,accel=kvm \
   -drive file=FreeBSD-14.3-RELEASE-amd64-debugger.qcow2,format=qcow2 \
   -netdev user,id=net0 \
