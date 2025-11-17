@@ -1,4 +1,10 @@
-# VM setup instructions
+# VM setup guide
+
+## Synopsis
+
+This guide explains how to set up two FreeBSD virtual machines using [QEMU](https://www.qemu.org/).
+The target VM runs a FreeBSD GENERIC-DEBUG kernel.
+The debugger VM runs a regular kernel and contains everything needed to remotely debug the target.
 
 ## Prebuilt images
 
