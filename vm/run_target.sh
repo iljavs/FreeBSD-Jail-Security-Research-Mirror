@@ -1,11 +1,11 @@
 #!/bin/sh
 
 qemu-system-x86_64 \
-  -m 8G \
+  -m 16G \
   -cpu host \
-  -smp 8 \
+  -smp 10 \
   -machine q35,accel=kvm \
-  -drive file=FreeBSD-14.3-RELEASE-amd64.qcow2,format=qcow2 \
+  -drive file=FreeBSD-14.3-RELEASE-amd64-target.qcow2,format=qcow2 \
   -netdev user,id=net0,hostfwd=tcp::2222-:22 \
   -device e1000,netdev=net0,mac=52:54:00:aa:00:01 \
   -netdev socket,id=net1,listen=:12346 \
