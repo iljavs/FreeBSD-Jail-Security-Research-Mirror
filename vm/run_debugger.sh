@@ -10,7 +10,7 @@ qemu-system-x86_64 \
   -device e1000,netdev=net0,mac=52:54:00:aa:00:03 \
   -netdev socket,id=net1,connect=:12346 \
   -device e1000,netdev=net1,mac=52:54:00:aa:00:04 \
-  -nographic \
   -serial mon:stdio \
+  -nographic \
   -vga none \
   -display none

@@ -2,13 +2,11 @@
 
 ## Synopsis
 
-This guide explains how to set up two FreeBSD virtual machines using [QEMU](https://www.qemu.org/).
-The target VM runs a FreeBSD GENERIC-DEBUG kernel.
-The debugger VM runs a regular kernel and contains everything needed to remotely debug the target.
+This guide explains how to set up a FreeBSD virtual machine using [QEMU](https://www.qemu.org/), compile a GENERIC-DEBUG kernel and set up an online debugging environment. The virtual disk image is then cloned to spin up a second FreeBSD virtual machine that can is reconfigured to run the online debugger.
 
 ## Prebuilt images
 
-Two prebuilt qcow2 images, compatible with the `run___.sh` scripts, are available for download from https://hacktheplanet.be/philez/freebsd/, which means you can skip this entire guide. One image runs FreeBSD with the GENERIC-DEBUG kernel to help with proof of concept exploit development. The other image runs FreeBSD with the regular kernel and has everything needed to remotely debug the target. Download, decompress and use them with the appropriate `run___.sh ` script. The root password is `foobar`.
+Two prebuilt qcow2 images, compatible with the `run___.sh` scripts, are available for download from https://hacktheplanet.be/philez/freebsd/, which means you can skip this entire guide. Both images run a GENERIC-DEBUG kernel and have kgdb installed. The target image has been configured to run a jail to help with proof of concept exploit development and has a serial debug port enabled. The debugger image has everything you need to remotely debug the target. Download, decompress and use them with the appropriate `run___.sh ` script. The root password is `foobar`.
 
 ## Fetch the FreeBSD 14.3-RELEASE installation ISO
 
@@ -17,15 +15,13 @@ curl -sL https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.3/FreeB
   | xz -d > /tmp/FreeBSD-14.3-RELEASE-amd64-bootonly.iso
 ```
 
-## Target VM
-
-### Create a virtual disk
+## Create a virtual disk
 
 ```sh
-qemu-img create -f qcow2 FreeBSD-14.3-RELEASE-amd64.qcow2 50G
+qemu-img create -f qcow2 FreeBSD-14.3-RELEASE-amd64.qcow2 20G
 ```
 
-### Boot the target VM for installation
+## Boot the VM for FreeBSD installation
 
 ```sh
 qemu-system-x86_64 \
@@ -40,7 +36,7 @@ qemu-system-x86_64 \
   -netdev user,id=net0,hostfwd=tcp::2222-:22
 ```
 
-### Install FreeBSD with mostly defaults
+## Install FreeBSD with mostly defaults
 
 - Distribution Select: base-dbg, kernel-dbg, lib32-dbg, lib32, src
 - Partitioning: Guided UFS Disk Setup, Entire disk, MBR
@@ -51,7 +47,7 @@ qemu-system-x86_64 \
 
 Shut down the VM
 
-### Boot the target VM for configuration
+## Boot the VM for configuration
 
 ```sh
 qemu-system-x86_64 \
@@ -60,15 +56,11 @@ qemu-system-x86_64 \
   -smp 4 \
   -machine q35,accel=kvm \
   -drive file=FreeBSD-14.3-RELEASE-amd64.qcow2,format=qcow2 \
-  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
   -device e1000,netdev=net0,mac=52:54:00:aa:00:01 \
-  -netdev socket,id=net1,listen=:12346 \
-  -device e1000,netdev=net1,mac=52:54:00:aa:00:02 \
-  -serial mon:stdio \
-  -serial tcp:0.0.0.0:4444,server,nowait
+  -netdev user,id=net0,hostfwd=tcp::2222-:22
 ```
 
-### Enable ssh root login for convenience
+## Enable ssh root login for convenience
 
 ```sh
 sed -i '' 's/^#PermitRootLogin no/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -76,15 +68,15 @@ sed -i '' 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/s
 service sshd restart
 ```
 
-### SSH into the target VM to continue configuration
+## SSH into the VM to continue configuration
 
-Connecting to the VM through ssh makes it easier to copy paste the configuration commands that follow. Doing this over a serial console has issues because of lag / buffer / missing characters.
+Connecting to the VM through ssh makes it easier to copy paste the configuration commands that follow. Doing this over a serial console has issues because of lag / buffer / missing characters and will cause you a world of pain. Ask me how I know, please do.
 
 ```sh
 ssh -p 2222 -o PreferredAuthentications=password -o PubkeyAuthentication=no root@localhost
 ```
 
-### Update target VM `loader.conf`
+## Update `loader.conf`
 
 ```sh
 cat << 'EOF' > /boot/loader.conf
@@ -100,7 +92,7 @@ gdb_enable="YES"
 EOF
 ```
 
-### Update target VM `device.hints`
+## Update `device.hints`
 
 This is necessary to make sure uart1 is available as a serial debug port.
 
@@ -110,7 +102,7 @@ hint.uart.1.flags="0x90"
 EOF
 ```
 
-### Update target VM `sysctl.conf`
+## Update `sysctl.conf`
 
 Give the hacker time to take a screenshot of the spoils.
 
@@ -122,7 +114,7 @@ debug.kdb.current=gdb
 EOF
 ```
 
-### Update target VM `rc.conf`
+## Update `rc.conf`
 
 ```sh
 cat << 'EOF' > /etc/rc.conf
@@ -144,7 +136,7 @@ ifconfig_em1="inet 192.168.100.1/24"
 EOF
 ```
 
-### Set up a jail directory tree in the target VM
+## Set up a jail directory tree
 
 ```sh
 mkdir /usr/local/jails/
@@ -152,27 +144,27 @@ mkdir /usr/local/jails/media
 mkdir /usr/local/jails/containers
 ```
 
-### Fetch userland for jail
+## Fetch userland for jail
 
 ```sh
 fetch https://download.freebsd.org/ftp/releases/amd64/amd64/14.3-RELEASE/base.txz -o /usr/local/jails/media/14.3-RELEASE-base.txz
 ```
 
-### Create a proof of concept jail in the target VM
+## Create a proof of concept jail
 
 ```sh
 mkdir -p /usr/local/jails/containers/prisonbreak
 tar -xf /usr/local/jails/media/14.3-RELEASE-base.txz -C /usr/local/jails/containers/prisonbreak --unlink
 ```
 
-### Copy over timezone and DNS configuration files
+## Copy over timezone and DNS configuration files
 
 ```sh
 cp /etc/resolv.conf /usr/local/jails/containers/prisonbreak/etc/resolv.conf
 cp /etc/localtime /usr/local/jails/containers/prisonbreak/etc/localtime
 ```
 
-### Configure jails in the target VM
+## Configure jails
 
 ```sh
 cat << 'EOF' > /etc/jail.conf
@@ -180,7 +172,7 @@ cat << 'EOF' > /etc/jail.conf
 EOF
 ```
 
-### Configure a proof of concept jail in target VM
+## Configure a proof of concept jail
 
 ```sh
 cat << 'EOF' > /etc/jail.conf.d/prisonbreak.conf
@@ -223,125 +215,25 @@ prisonbreak {
 EOF
 ```
 
-### Shut down the target VM
+Shut down the VM
 
-```sh
-poweroff
-```
-
-## Debugger VM
-
-### Create a virtual disk
-
-```sh
-qemu-img create -f qcow2 FreeBSD-14.3-RELEASE-amd64-debugger.qcow2 10G
-```
-
-### Boot the debugger VM for installation
-
-```sh
-qemu-system-x86_64 \
-  -m 2G \
-  -cpu host \
-  -smp 2 \
-  -machine q35,accel=kvm \
-  -drive file=FreeBSD-14.3-RELEASE-amd64-debugger.qcow2,format=qcow2 \
-  -cdrom /tmp/FreeBSD-14.3-RELEASE-amd64-bootonly.iso \
-  -boot d \
-  -device e1000,netdev=net0 \
-  -netdev user,id=net0,hostfwd=tcp::2222-:22
-```
-
-### Install FreeBSD with mostly defaults
-
-- Distribution Select: base-dbg, kernel-dbg, lib32-dbg, lib32, src
-- Partitioning: Guided UFS Disk Setup, Entire disk, MBR
-- Time Zone: Europe/Belgium
-- System configuration: sshd
-- System Hardening: keep defaults (no extra hardening options enabled)
-- Extra users: no need
-
-Shut down VM
-
-### Boot the debugger VM for configuration
-
-```sh
-qemu-system-x86_64 \
-  -m 2G \
-  -cpu host \
-  -smp 2 \
-  -machine q35,accel=kvm \
-  -drive file=FreeBSD-14.3-RELEASE-amd64-debugger.qcow2,format=qcow2 \
-  -device e1000,netdev=net0 \
-  -netdev user,id=net0,hostfwd=tcp::2222-:22
-```
-
-### Enable ssh root login for convenience
-
-```sh
-sed -i '' 's/^#PermitRootLogin no/PermitRootLogin yes/' /etc/ssh/sshd_config
-sed -i '' 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-service sshd restart
-```
-
-### SSH into the debugger VM to continue configuration
-
-Connecting to the VM through ssh makes it easier to copy paste the configuration commands that follow. Doing this over a serial console has issues because of lag / buffer / missing characters.
-
-```sh
-ssh -p 2222 -o PreferredAuthentications=password -o PubkeyAuthentication=no root@localhost
-```
-
-### Update debugger VM `loader.conf`
-
-```sh
-cat << 'EOF' > /boot/loader.conf
-autoboot_delay=3
-console="comconsole"
-boot_serial="YES"
-EOF
-```
-
-### Update debugger VM `sysctl.conf`
-
-Give the hacker time to take a screenshot of debugger problems.
-
-```sh
-cat << 'EOF' > /etc/sysctl.conf
-kern.panic_reboot_wait_time=-1
-EOF
-```
-
-### Update debugger VM `rc.conf`
-
-```sh
-cat << 'EOF' > /etc/rc.conf
-hostname="prisonbreak-debugger"
-sshd_enable="YES"
-moused_nondefault_enable="NO"
-dumpdev="NO"
-
-# Network to host for internet access
-defaultrouter="10.0.2.2"
-ifconfig_em0="inet 10.0.2.16/24"
-
-# Network between debugger and target VM to copy kernel image and other files
-ifconfig_em1="inet 192.168.100.2/24"
-EOF
-```
-
-### Shut down the debugger VM
-
-```sh
-poweroff
-```
-
-## Build and install a DEBUG kernel on the target VM
+## Build and install a DEBUG kernel on the VM
 
 ### Start the target VM with a serial console
 
 ```sh
-./run.sh
+qemu-system-x86_64 \
+  -m 16G \
+  -cpu host \
+  -smp 10 \
+  -machine q35,accel=kvm \
+  -drive file=FreeBSD-14.3-RELEASE-amd64.qcow2,format=qcow2 \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+  -device e1000,netdev=net0,mac=52:54:00:aa:00:01 \
+  -serial mon:stdio \
+  -nographic \
+  -vga none \
+  -display none
 ```
 
 ### Log in as root
@@ -375,37 +267,94 @@ Install the DEBUG kernel
 make installkernel KERNCONF=GENERIC-DEBUG
 ```
 
-Copy the debug kernel image over to the debugger VM
-
-```sh
-scp /usr/lib/debug/boot/kernel/kernel.debug 192.168.100.2:/root/
-```
-
-## Install kgdb on the debugger VM
-
-### Start the debugger VM with serial console
-
-```sh
-./run_debugger.sh
-```
-
-### Log in as root
-
-```
-login: root
-password: foobar
-```
-
-### Install the gdb package
+## Install kgdb
 
 ```sh
 pkg install gdb
 ```
 
+## Shut down the VM
+
+```sh
+poweroff
+```
+
+## Copy the disk image for the target VM
+
+```sh
+cp FreeBSD-14.3-RELEASE-amd64.qcow2 FreeBSD-14.3-RELEASE-amd64-target.qcow2
+```
+
+## Rename the disk image for the debugger VM
+
+```sh
+mv FreeBSD-14.3-RELEASE-amd64.qcow2 FreeBSD-14.3-RELEASE-amd64-debugger.qcow2
+```
+
+## Reconfigure debugger VM for online debugging of the target VM
+
+```sh
+./run_debugger.sh # or ./run_debugger_apple.sh on Apple Silicon
+```
+
+### Update `rc.conf`
+
+```sh
+cat << 'EOF' > /etc/rc.conf
+hostname="prisonbreak-debugger"
+sshd_enable="YES"
+moused_nondefault_enable="NO"
+dumpdev="NO"
+
+# Network to host for internet access
+defaultrouter="10.0.2.2"
+ifconfig_em0="inet 10.0.2.16/24"
+
+# Network between debugger and target VM to copy kernel image and other files
+ifconfig_em1="inet 192.168.100.2/24"
+EOF
+```
+
+## Update `/boot/loader.conf`
+
+Remove the following lines
+
+```
+# Extra serial configuration for console and debugger to co-exist
+boot_multicons="YES"
+gdb_port="0x2f8"
+gdb_debugger="YES"
+gdb_enable="YES"
+```
+
+### Update `/boot/device.hints`
+
+Remove the following line
+
+```
+hint.uart.1.flags="0x90"
+```
+
+### Update `sysctl.conf`
+
+```sh
+cat << 'EOF' > /etc/sysctl.conf
+kern.panic_reboot_wait_time=-1
+EOF
+```
+
+Reboot the debugger VM
+
+### Start the target VM
+
+```sh
+./run.sh # or ./run_apple.sh on Apple Silicon
+```
+
 ### Start kgdb on the debugger VM
 
 ```sh
-kgdb -r 10.0.2.2:4444 /root/kernel.debug
+kgdb -r 10.0.2.2:4444 /usr/lib/debug/boot/kernel/kernel.debug
 ```
 
 ### Enter the debugger on the target VM
