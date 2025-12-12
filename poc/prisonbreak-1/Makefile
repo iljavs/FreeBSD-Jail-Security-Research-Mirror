@@ -2,11 +2,10 @@ CC = cc
 CFLAGS =
 LDFLAGS = -lpthread
 
-all: main
+all: prisonbreak
 
-main: main.c
+prisonbreak: prisonbreak.c
 	$(CC) -o $@ $< $(LDFLAGS)
 
 clean:
-	rm -f main
-
+	rm -f prisonbreak prisonbreak.ko
