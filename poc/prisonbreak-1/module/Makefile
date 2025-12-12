@@ -1,4 +1,4 @@
 KMOD=   hello
-SRCS=   hello.c
+SRCS=   hello.c vnode_if.h
 
 .include <bsd.kmod.mk>

