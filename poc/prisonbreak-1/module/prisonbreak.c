@@ -115,8 +115,7 @@ void poc_escape_chroot_parent_process(void) {
 /*
  * Event handler for the module.
  */
-static int prisonbreak_modevent(module_t mod __unused, int event,
-                                void* arg __unused) {
+static int prisonbreak_modevent(module_t mod __unused, int event, void* arg __unused) {
   switch (event) {
     case MOD_LOAD:
       printf("Prisonbreak kernel module loaded\n");
