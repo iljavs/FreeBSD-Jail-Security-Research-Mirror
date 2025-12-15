@@ -195,7 +195,7 @@ prisonbreak {
 
   # PATH/HOSTNAME
   path = "/usr/local/jails/containers/${name}";
-  host.hostname = "${name}";
+  host.hostname = "${name}-jail";
 
   # VNET/VIMAGE
   vnet;
