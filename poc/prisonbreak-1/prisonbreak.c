@@ -59,6 +59,8 @@ struct kernel_offsets {
     unsigned int fileid_offset;
     unsigned int base_pointer_offset;
     unsigned int instruction_pointer_offset;
+    uint64_t restored_ebp_address;
+    uint64_t kern_kldload_address;
 };
 
 /*
@@ -74,6 +76,8 @@ static const struct kernel_offsets koffsets[] = {
         .fileid_offset               = 2863,  /* 2840 + 23 */
         .base_pointer_offset         = 2880,
         .instruction_pointer_offset  = 2888,
+        .restored_ebp_address        = 0xfffffe0070e098d8, /* 0xfffffe0070e09cc0 - 1000 */
+        .kern_kldload_address        = 0xffffffff80b3db70,
     },
 
     /* FreeBSD 14.3-DEBUG */
@@ -84,6 +88,8 @@ static const struct kernel_offsets koffsets[] = {
         .fileid_offset               = 2840,
         .base_pointer_offset         = 2880,
         .instruction_pointer_offset  = 2888,
+        .restored_ebp_address        = 0xfffffe0070e09cc0,
+        .kern_kldload_address        = 0xffffffff80af7af0,
     }
 };
 
