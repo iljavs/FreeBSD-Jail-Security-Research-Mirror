@@ -46,6 +46,47 @@ struct print_msg {
   char msg[0];
 };
 
+enum {
+    FBSD_15_RELEASE = 0,
+    FBSD_14_DEBUG   = 1,
+    UNKNOWN = 2
+};
+
+struct kernel_offsets {
+    unsigned int stack_cookie_offset;
+    unsigned int td_offset;
+    unsigned int kernel_module_path_offset;
+    unsigned int fileid_offset;
+    unsigned int base_pointer_offset;
+    unsigned int instruction_pointer_offset;
+};
+
+/*
+ * [0] FreeBSD 15.0-RELEASE
+ * [1] FreeBSD 14.3-DEBUG
+ */
+static const struct kernel_offsets koffsets[] = {
+    /* FreeBSD 15.0-RELEASE */
+    {
+        .stack_cookie_offset         = 2832,
+        .td_offset                   = 2848,  /* 2872 - 24 */
+        .kernel_module_path_offset   = 2872,  /* 2864 + 8 */
+        .fileid_offset               = 2863,  /* 2840 + 23 */
+        .base_pointer_offset         = 2880,
+        .instruction_pointer_offset  = 2888,
+    },
+
+    /* FreeBSD 14.3-DEBUG */
+    {
+        .stack_cookie_offset         = 2832,
+        .td_offset                   = 2872,
+        .kernel_module_path_offset   = 2864,
+        .fileid_offset               = 2840,
+        .base_pointer_offset         = 2880,
+        .instruction_pointer_offset  = 2888,
+    }
+};
+
 /*
 Prerequisites
 -------------
