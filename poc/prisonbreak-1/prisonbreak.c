@@ -67,6 +67,8 @@ How to run
 
 // prisonbreak() configuration
 #define USER_MAPPED_MEMORY_ADDRESS 0x0000414141410000ULL
+#define USER_MAPPED_MEMORY_LEN 4096
+#define USER_MAPPED_MEMORY_PAGES 4
 
 typedef struct synchdr {
   u_32_t sm_magic; /* magic */
@@ -392,8 +394,8 @@ void* prisonbreak(void* arg) {
 }
 
 int map_memory() {
-  size_t pages = 4;
-  size_t len = 4096 * pages;
+  size_t pages = USER_MAPPED_MEMORY_PAGES;
+  size_t len = USER_MAPPED_MEMORY_LEN * pages;
 
   void* fixed = (void*)(uintptr_t)USER_MAPPED_MEMORY_ADDRESS;
 

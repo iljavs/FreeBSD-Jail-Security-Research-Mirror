@@ -10,6 +10,9 @@
 #include <sys/_stdarg.h>
 
 #define USER_MAPPED_MEMORY_ADDRESS 0x0000414141410000ULL
+#define USER_MAPPED_MEMORY_LEN 4096
+#define USER_MAPPED_MEMORY_PAGES 4
+
 extern struct mtx Giant;
 extern struct prison prison0;
 
@@ -134,7 +137,7 @@ struct buf* map_user_memory(void) {
 
   buf = uma_zalloc(pbuf_zone, M_WAITOK);
   buf->b_iocmd = BIO_READ;
-  if (vmapbuf(buf, fixed, 4096 * 4, 1) < 0) {
+  if (vmapbuf(buf, fixed, USER_MAPPED_MEMORY_LEN * USER_MAPPED_MEMORY_PAGES, 1) < 0) {
     printf("map_user_memory(): Failed...\n");
     uma_zfree(pbuf_zone, buf);
     return NULL;
