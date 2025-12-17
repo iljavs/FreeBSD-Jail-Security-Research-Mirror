@@ -16,6 +16,8 @@
 extern struct mtx Giant;
 extern struct prison prison0;
 
+enum { MSG_NOT_READY = 0, MSG_READY = 1, MSG_DONE = 2 };
+
 struct print_msg {
   unsigned int entry_ready;
   unsigned int len;
@@ -151,14 +153,14 @@ void user_log(char* fmt, ...) {
   struct print_msg* msg;
   msg = (struct print_msg*)user_memory;
 
-  while (msg->entry_ready != 0) {
+  while (msg->entry_ready != MSG_NOT_READY) {
     msg = (struct print_msg*)(((char*)msg) + msg->len + sizeof(struct print_msg));
   }
   va_start(args, fmt);
   int count = vsprintf(msg->msg, fmt, args);
   va_end(args);
   msg->len = count;
-  msg->entry_ready = 1;
+  msg->entry_ready = MSG_READY;
 }
 
 void report_exploit_done(void) {
@@ -166,10 +168,10 @@ void report_exploit_done(void) {
   struct print_msg* msg;
   msg = (struct print_msg*)user_memory;
 
-  while (msg->entry_ready != 0) {
+  while (msg->entry_ready != MSG_NOT_READY) {
     msg = (struct print_msg*)(((char*)msg) + msg->len + sizeof(struct print_msg));
   }
-  msg->entry_ready = 2;
+  msg->entry_ready = MSG_DONE;
 }
 
 /*

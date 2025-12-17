@@ -82,6 +82,8 @@ typedef struct synchdr {
   void* sm_sl;     /* back pointer to parent */
 } synchdr_t;
 
+enum { MSG_NOT_READY = 0, MSG_READY = 1, MSG_DONE = 2 };
+
 struct print_msg {
   unsigned int entry_ready;
   unsigned int len;
@@ -419,9 +421,9 @@ void dispatch_messages() {
   struct print_msg* msg = fixed;
 
   while (1) {
-    while (msg->entry_ready == 0);
+    while (msg->entry_ready == MSG_NOT_READY);
 
-    if (msg->entry_ready == 2) {
+    if (msg->entry_ready == MSG_DONE) {
       printf("Final message received. Exploit done. You've probably made it out of prison.\n");
 
       return;
