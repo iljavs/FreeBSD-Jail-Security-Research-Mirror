@@ -163,7 +163,6 @@ unsigned long get_td() {
   size_t len = sizeof(kp);
   pid_t pid = getpid();
 
-  /* mib = { CTL_KERN, KERN_PROC, KERN_PROC_PID, pid } */
   mib[0] = CTL_KERN;
   mib[1] = KERN_PROC;
   mib[2] = KERN_PROC_PID;
@@ -187,7 +186,6 @@ unsigned long get_pargs() {
   size_t len = sizeof(kp);
   pid_t pid = getpid();
 
-  /* mib = { CTL_KERN, KERN_PROC, KERN_PROC_PID, pid } */
   mib[0] = CTL_KERN;
   mib[1] = KERN_PROC;
   mib[2] = KERN_PROC_PID;
