@@ -434,7 +434,7 @@ void dispatch_messages() {
       return;
     }
 
-    printf("MSG: %s", msg->msg);
+    printf("Module message: %s", msg->msg);
     msg = (struct print_msg*)(((char*)msg) + msg->len + sizeof(struct print_msg));
   }
 }
