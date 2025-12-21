@@ -1,3 +1,12 @@
+/*
+ * ---------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * Ilja van Sprundel and Michael Smith wrote this file. As long as you retain
+ * this notice you can do whatever you want with this stuff. If we meet some
+ * day, and you think this stuff is worth it, you can buy us a beer in return
+ * ---------------------------------------------------------------------------
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,32 +37,32 @@ qemu-system-x86_64 \
 */
 
 int main() {
-    int sock;
-    struct dn_id del_pipe;
+  int sock;
+  struct dn_id del_pipe;
 
-    // 1. Create a socket for PF_INET
-    sock = socket(AF_INET, SOCK_RAW, 0);
-    if (sock < 0) {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
+  // 1. Create a socket for PF_INET
+  sock = socket(AF_INET, SOCK_RAW, 0);
+  if (sock < 0) {
+    perror("socket");
+    exit(EXIT_FAILURE);
+  }
 
-    // 2. Specify the pipe ID to delete
-    memset(&del_pipe, 0, sizeof(del_pipe));
-    del_pipe.id = 1;  // pipe number you want to delete
+  // 2. Specify the pipe ID to delete
+  memset(&del_pipe, 0, sizeof(del_pipe));
+  del_pipe.id = 1;  // pipe number you want to delete
 
-    // 3. Call setsockopt to delete the pipe
-    int error;
-    if ((error = setsockopt(sock, IPPROTO_IP, IP_DUMMYNET_DEL, &del_pipe, 0x7FFFFF00)) < 0) {
-        printf("%d\n", error);
-        printf("%d\n", errno);
-        perror("setsockopt IP_DUMMYNET_DEL");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Dummynet pipe %d deleted successfully\n", del_pipe.id);
-
+  // 3. Call setsockopt to delete the pipe
+  int error;
+  if ((error = setsockopt(sock, IPPROTO_IP, IP_DUMMYNET_DEL, &del_pipe, 0x7FFFFF00)) < 0) {
+    printf("%d\n", error);
+    printf("%d\n", errno);
+    perror("setsockopt IP_DUMMYNET_DEL");
     close(sock);
-    return 0;
+    exit(EXIT_FAILURE);
+  }
+
+  printf("Dummynet pipe %d deleted successfully\n", del_pipe.id);
+
+  close(sock);
+  return 0;
 }

