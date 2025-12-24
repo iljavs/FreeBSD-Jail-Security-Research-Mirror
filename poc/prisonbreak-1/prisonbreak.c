@@ -12,8 +12,6 @@ Proof of concept jail escape exploit for x86-64 FreeBSD by Ilja van Sprundel and
 
 https://github.com/iljavs/FreeBSD-Jail-Security-Research
 
-TODO: Moar disclaimer / license info?
-
 Prerequisites
 -------------
 1. Host must have carp kernel module loaded
