@@ -7,10 +7,10 @@
  * ---------------------------------------------------------------------------
  */
 
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #define IPFW_TABLES_MAX 128
 
@@ -25,13 +25,13 @@ struct ipfw_table {
   struct ipfw_table_entry ent[0]; /* variable size array */
 };
 
+#include <arpa/inet.h>
+#include <errno.h>
 #include <netinet/ip_fw.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include <arpa/inet.h>
 
 // NOTE(m): Requires ipfw kernel module to be loaded in host
 /*
@@ -41,7 +41,7 @@ sysrc firewall_type="open"
 
 int main() {
   int sock;
-  struct ipfw_table* tbl;
+  struct ipfw_table *tbl;
   socklen_t l;
   int i;
 
@@ -51,10 +51,6 @@ int main() {
     exit(EXIT_FAILURE);
   }
 
-  // allocate space for up to 128 entries
-  // l = sizeof(struct ipfw_table) + 128 * sizeof(struct ipfw_table_entry);
-
-  // TODO(m): Figure out why l and huge are related? Cfc. "Bad address" error.
   l = 0x7FFFFF00;
   tbl = malloc(l);
   if (!tbl) {
@@ -63,16 +59,10 @@ int main() {
     return 1;
   }
 
-  // memset(tbl, 0, l);
-
-  tbl->tbl = 1;  // table number you want to list
-
+  tbl->tbl = 1;
   socklen_t huge = 0x7FFFFF00;
 
-  int error;
-  if ((error = getsockopt(sock, IPPROTO_IP, IP_FW_TABLE_LIST, tbl, &huge)) < 0) {
-    printf("%d\n", error);
-    printf("%d\n", errno);
+  if (getsockopt(sock, IPPROTO_IP, IP_FW_TABLE_LIST, tbl, &huge) < 0) {
     perror("setsockopt IP_FW_TABLE_LIST");
     close(sock);
     exit(EXIT_FAILURE);
