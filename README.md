@@ -6,3 +6,7 @@
 ## Setup and run FreeBSD target and debugger virtual machines
 
 See [VM setup guide](https://github.com/iljavs/FreeBSD-Jail-Security-Research/blob/main/docs/vm-setup-guide.md).
+
+## Live demo
+
+[Watch a live demo of our exploit that we showed during our talk at 39C3](https://github.com/iljavs/FreeBSD-Jail-Security-Research-Mirror/blob/main/poc/prisonbreak-1/Live%20demo.mov)
