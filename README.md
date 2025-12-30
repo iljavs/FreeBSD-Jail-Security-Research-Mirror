@@ -9,4 +9,4 @@ See [VM setup guide](https://github.com/iljavs/FreeBSD-Jail-Security-Research-Mi
 
 ## Live demo
 
-[Watch a live demo of our exploit that we showed during our talk at 39C3](https://drive.google.com/file/d/1M7R8m5zniNsnTu06UdE7EzIqUCAgIOs8/view?usp=sharing)
+[Watch a live demo of our exploit that we showed during our talk at 39C3](https://drive.google.com/file/d/1M7R8m5zniNsnTu06UdE7EzIqUCAgIOs8/preview)
