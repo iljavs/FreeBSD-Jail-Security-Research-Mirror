@@ -9,4 +9,4 @@ See [VM setup guide](https://github.com/iljavs/FreeBSD-Jail-Security-Research-Mi
 
 ## Live demo
 
-[Watch a live demo of our exploit that we showed during our talk at 39C3](https://github.com/iljavs/FreeBSD-Jail-Security-Research-Mirror/raw/refs/heads/main/screenshots/poc-prisonbreak-1/Live%20demo.mov)
+[Watch a live demo of our exploit that we showed during our talk at 39C3](https://github.com/iljavs/FreeBSD-Jail-Security-Research-Mirror/raw/refs/heads/main/screenshots/poc-prisonbreak-1/Live%20demo.mp4)
