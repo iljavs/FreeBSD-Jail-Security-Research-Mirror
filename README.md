@@ -5,7 +5,7 @@
 
 ## Setup and run FreeBSD target and debugger virtual machines
 
-See [VM setup guide](https://github.com/iljavs/FreeBSD-Jail-Security-Research/blob/main/docs/vm-setup-guide.md).
+See [VM setup guide](https://github.com/iljavs/FreeBSD-Jail-Security-Research-Mirror/blob/main/docs/vm-setup-guide.md).
 
 ## Live demo
 
